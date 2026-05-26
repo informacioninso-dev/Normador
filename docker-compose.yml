@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: audibot-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-audibot}
+      POSTGRES_USER: ${POSTGRES_USER:-audibot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-audibot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: audibot-redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: audibot-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+    container_name: audibot-backend
+    command: python manage.py runserver 0.0.0.0:8000
+    env_file:
+      - backend/.env.example
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+    container_name: audibot-frontend
+    command: npm run dev -- --hostname 0.0.0.0
+    env_file:
+      - frontend/.env.example
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  ollama_data:
