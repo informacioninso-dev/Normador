@@ -1,4 +1,5 @@
 from collections import defaultdict
+from decimal import Decimal
 
 from apps.common.choices import ChecklistStatus
 
@@ -40,6 +41,13 @@ def generate_project_progress_report(project) -> dict:
     evidences = list(
         project.evidences.select_related("requirement", "action_plan").order_by(
             "-uploaded_at",
+            "-id",
+        )
+    )
+    worklogs = list(
+        project.worklogs.select_related("consultant", "action_plan", "approved_by").order_by(
+            "-work_date",
+            "-created_at",
             "-id",
         )
     )
@@ -90,8 +98,13 @@ def generate_project_progress_report(project) -> dict:
             "open_findings_count": len(open_findings),
             "open_action_plans_count": len(open_action_plans),
             "validated_evidence_count": len(validated_evidences),
+            "worklog_entries_count": len(worklogs),
+            "logged_hours": _decimal_to_float(sum((entry.logged_hours for entry in worklogs), Decimal("0.00"))),
+            "billable_hours": _decimal_to_float(sum((entry.billable_hours for entry in worklogs), Decimal("0.00"))),
+            "approved_hours": _decimal_to_float(sum((entry.approved_hours for entry in worklogs), Decimal("0.00"))),
         },
         "process_areas": _build_process_area_summary(checklist_items),
+        "worklog": _build_worklog_summary(worklogs),
         "latest_reviews": [
             {
                 "id": review.id,
@@ -124,6 +137,7 @@ def generate_project_progress_report(project) -> dict:
             open_findings=open_findings,
             open_action_plans=open_action_plans,
             validated_evidences=validated_evidences,
+            worklogs=worklogs,
         ),
     }
     return report
@@ -200,6 +214,7 @@ def _build_recommendations(
     open_findings,
     open_action_plans,
     validated_evidences,
+    worklogs,
 ) -> list[str]:
     recommendations = []
 
@@ -235,9 +250,82 @@ def _build_recommendations(
         recommendations.append(
             "Subir y validar al menos una evidencia real para demostrar la separacion entre soporte documental e implementacion."
         )
+    if worklogs and sum((entry.approved_hours for entry in worklogs), Decimal("0.00")) == Decimal("0.00"):
+        recommendations.append(
+            "Revisar y aprobar horas del asesor para dejar trazabilidad lista para facturacion."
+        )
     if not recommendations:
         recommendations.append(
             "El proyecto no presenta bloqueadores visibles; el siguiente paso es mantener evidencia y vigencia documental para el piloto."
         )
 
     return recommendations
+
+
+def _build_worklog_summary(worklogs) -> dict:
+    by_consultant: dict[str, dict] = defaultdict(
+        lambda: {
+            "entries": 0,
+            "logged_hours": Decimal("0.00"),
+            "billable_hours": Decimal("0.00"),
+            "approved_hours": Decimal("0.00"),
+        }
+    )
+    by_activity_type: dict[str, dict] = defaultdict(
+        lambda: {"entries": 0, "logged_hours": Decimal("0.00")}
+    )
+
+    for entry in worklogs:
+        consultant_key = entry.consultant.username
+        by_consultant[consultant_key]["entries"] += 1
+        by_consultant[consultant_key]["logged_hours"] += entry.logged_hours
+        by_consultant[consultant_key]["billable_hours"] += entry.billable_hours
+        by_consultant[consultant_key]["approved_hours"] += entry.approved_hours
+
+        by_activity_type[entry.activity_type]["entries"] += 1
+        by_activity_type[entry.activity_type]["logged_hours"] += entry.logged_hours
+
+    return {
+        "recent_entries": [
+            {
+                "id": entry.id,
+                "consultant": entry.consultant.username,
+                "work_date": entry.work_date.isoformat(),
+                "activity_type": entry.activity_type,
+                "title": entry.title,
+                "logged_hours": _decimal_to_float(entry.logged_hours),
+                "billable_hours": _decimal_to_float(entry.billable_hours),
+                "approved_hours": _decimal_to_float(entry.approved_hours),
+                "status": entry.status,
+            }
+            for entry in worklogs[:7]
+        ],
+        "by_consultant": [
+            {
+                "consultant": consultant,
+                "entries": values["entries"],
+                "logged_hours": _decimal_to_float(values["logged_hours"]),
+                "billable_hours": _decimal_to_float(values["billable_hours"]),
+                "approved_hours": _decimal_to_float(values["approved_hours"]),
+            }
+            for consultant, values in sorted(
+                by_consultant.items(),
+                key=lambda item: (-item[1]["logged_hours"], item[0]),
+            )
+        ],
+        "by_activity_type": [
+            {
+                "activity_type": activity_type,
+                "entries": values["entries"],
+                "logged_hours": _decimal_to_float(values["logged_hours"]),
+            }
+            for activity_type, values in sorted(
+                by_activity_type.items(),
+                key=lambda item: (-item[1]["logged_hours"], item[0]),
+            )
+        ],
+    }
+
+
+def _decimal_to_float(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01")))

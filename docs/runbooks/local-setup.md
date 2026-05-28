@@ -70,6 +70,7 @@ Rutas utiles:
 - `/projects/{id}/documents`
 - `/projects/{id}/reviews`
 - `/projects/{id}/action-plans`
+- `/projects/{id}/tracking`
 - `/projects/{id}/evidence`
 - `/projects/{id}/report`
 
@@ -81,6 +82,7 @@ La UI ya ejecuta estas mutaciones contra backend:
 - correr revision
 - crear plan de accion
 - mover plan de accion
+- registrar seguimiento del implementador
 - registrar evidencia
 - validar o rechazar evidencia
 
@@ -163,6 +165,8 @@ Endpoints base:
 - `POST /api/action-plans/{id}/start_progress/`
 - `POST /api/action-plans/{id}/resolve/`
 - `POST /api/action-plans/{id}/close_plan/`
+- `GET /api/implementation-activities/?project={id}`
+- `POST /api/implementation-activities/`
 - `GET /api/evidences/?project={id}`
 - `POST /api/evidences/`
 - `POST /api/evidences/{id}/validate_evidence/`
@@ -180,6 +184,8 @@ description=Registro ejecutado del proceso
 Reglas relevantes:
 
 - la revision crea `ActionPlan` automaticos desde hallazgos
+- cada `ActionPlan` puede acumular una bitacora de seguimiento operativo
+- iniciar, resolver y cerrar un plan deja hitos automaticos en esa bitacora
 - la evidencia validada mueve el checklist a `IMPLEMENTADO` cuando aplica
 - `close_plan` exige una ultima revision conforme
 - si el requisito exige evidencia real, `close_plan` tambien exige `Evidence` en estado `VALIDADA`

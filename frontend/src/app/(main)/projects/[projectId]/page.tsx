@@ -100,10 +100,62 @@ export default async function ProjectOverviewPage({
   const openPlans = workspace.actionPlans.filter(
     (plan) => !["CERRADO", "SUPERSEDIDO"].includes(plan.status),
   );
+  const modules = [
+    {
+      title: "Checklist",
+      href: `/projects/${projectId}/checklist`,
+      meta: `${summary.closedRequirementsCount}/${summary.totalRequirements}`,
+    },
+    {
+      title: "Documentos",
+      href: `/projects/${projectId}/documents`,
+      meta: `${workspace.documents.length}`,
+    },
+    {
+      title: "Revisiones",
+      href: `/projects/${projectId}/reviews`,
+      meta: `${workspace.reviews.length}`,
+    },
+    {
+      title: "Pendientes",
+      href: `/projects/${projectId}/action-plans`,
+      meta: `${openPlans.length}`,
+    },
+    {
+      title: "Seguimiento",
+      href: `/projects/${projectId}/tracking`,
+      meta: `${workspace.implementationActivities.length}`,
+    },
+    {
+      title: "Evidencia",
+      href: `/projects/${projectId}/evidence`,
+      meta: `${workspace.evidences.length}`,
+    },
+    {
+      title: "Informe",
+      href: `/projects/${projectId}/report`,
+      meta: "Ver",
+    },
+  ];
 
   return (
     <div className="space-y-5">
       <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
+
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+        {modules.map((module) => (
+          <Link
+            key={module.title}
+            href={module.href}
+            className="rounded-[22px] border border-black/8 bg-white/82 px-4 py-4 transition hover:bg-white"
+          >
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{module.title}</p>
+            <p className="mt-2 text-2xl font-bold text-ink" style={{ fontFamily: "var(--font-display)" }}>
+              {module.meta}
+            </p>
+          </Link>
+        ))}
+      </section>
 
       <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
         <SectionCard title="Siguiente accion" description="Haz esto antes que otra cosa.">

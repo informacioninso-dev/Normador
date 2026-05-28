@@ -1,6 +1,6 @@
-# AudiBot ISO
+# Normador
 
-Base tecnica inicial para el MVP local de `AudiBot ISO`.
+Base tecnica inicial para el MVP local de `Normador`.
 
 ## Estado actual
 
@@ -121,6 +121,7 @@ Si no existe un `PromptTemplate` activo con slug `document-review-v1`, el sistem
 - `POST /api/action-plans/{id}/start_progress/`
 - `POST /api/action-plans/{id}/resolve/`
 - `POST /api/action-plans/{id}/close_plan/`
+- `GET, POST /api/implementation-activities/`
 - `GET, POST /api/evidences/`
 - `PATCH /api/evidences/{id}/`
 - `POST /api/evidences/{id}/validate_evidence/`
@@ -149,6 +150,7 @@ Rutas principales ya implementadas en `Next.js`:
 - `/projects/{id}/documents`
 - `/projects/{id}/reviews`
 - `/projects/{id}/action-plans`
+- `/projects/{id}/tracking`
 - `/projects/{id}/evidence`
 - `/projects/{id}/report`
 
@@ -161,8 +163,9 @@ Capacidades cubiertas:
 5. carga documental conectada al backend
 6. ejecucion de revisiones IA desde la UI
 7. gestion de pendientes y planes de accion
-8. registro y validacion de evidencia
-9. reporte ejecutivo por proyecto
+8. seguimiento operativo del implementador por proyecto y plan
+9. registro y validacion de evidencia
+10. reporte ejecutivo por proyecto
 
 El frontend usa `NEXT_PUBLIC_API_BASE_URL` y server actions para mutaciones, evitando depender del navegador para llamadas cross-origin directas al backend.
 

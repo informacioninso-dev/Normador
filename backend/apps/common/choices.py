@@ -9,6 +9,23 @@ class ProjectStatus(models.TextChoices):
     ARCHIVED = "ARCHIVED", "Archived"
 
 
+class WorklogActivityType(models.TextChoices):
+    IMPLEMENTATION = "IMPLEMENTACION", "Implementacion"
+    REVIEW = "REVISION", "Revision"
+    MEETING = "REUNION", "Reunion"
+    FOLLOW_UP = "SEGUIMIENTO", "Seguimiento"
+    TRAINING = "CAPACITACION", "Capacitacion"
+    REPORTING = "INFORME", "Informe"
+    ADMIN = "ADMINISTRATIVO", "Administrativo"
+    OTHER = "OTRO", "Otro"
+
+
+class WorklogStatus(models.TextChoices):
+    REGISTERED = "REGISTRADO", "Registrado"
+    APPROVED = "APROBADO", "Aprobado"
+    OBSERVED = "OBSERVADO", "Observado"
+
+
 class RequirementCriticality(models.TextChoices):
     LOW = "BAJA", "Baja"
     MEDIUM = "MEDIA", "Media"
@@ -99,6 +116,16 @@ class ActionPlanStatus(models.TextChoices):
     RESOLVED = "RESUELTO", "Resuelto"
     CLOSED = "CERRADO", "Cerrado"
     SUPERSEDED = "SUPERSEDIDO", "Supercedido"
+
+
+class ImplementationActivityType(models.TextChoices):
+    START = "INICIO", "Inicio"
+    PROGRESS = "AVANCE", "Avance"
+    FOLLOW_UP = "SEGUIMIENTO", "Seguimiento"
+    MEETING = "REUNION", "Reunion"
+    DELIVERABLE = "ENTREGABLE", "Entregable"
+    BLOCKER = "BLOQUEO", "Bloqueo"
+    CLOSURE = "CIERRE", "Cierre"
 
 
 class EvidenceValidationStatus(models.TextChoices):

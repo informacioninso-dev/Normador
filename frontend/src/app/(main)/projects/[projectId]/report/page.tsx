@@ -70,6 +70,12 @@ export default async function ProjectReportPage({
         />
       </section>
 
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard eyebrow="Horas registradas" value={workspace.worklogs.reduce((sum, entry) => sum + Number(entry.logged_hours), 0).toFixed(2)} />
+        <StatCard eyebrow="Horas facturables" value={workspace.worklogs.reduce((sum, entry) => sum + Number(entry.billable_hours), 0).toFixed(2)} />
+        <StatCard eyebrow="Horas aprobadas" value={workspace.worklogs.reduce((sum, entry) => sum + Number(entry.approved_hours), 0).toFixed(2)} />
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <SectionCard title="Datos del proyecto">
           <div className="space-y-3">
@@ -162,6 +168,28 @@ export default async function ProjectReportPage({
           ))}
           {!workspace.reviews.length && (
             <p className="text-sm text-ink/70">Sin revisiones ejecutadas.</p>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Registro diario">
+        <div className="space-y-3">
+          {workspace.worklogs.slice(0, 5).map((entry) => (
+            <div key={entry.id} className="rounded-[22px] bg-sand/75 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{entry.title}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/45">
+                    {entry.consultant_username} · {formatDate(entry.work_date)} · {entry.activity_type}
+                  </p>
+                </div>
+                <StatusBadge value={entry.status} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-ink/72">{entry.summary || "Sin detalle."}</p>
+            </div>
+          ))}
+          {!workspace.worklogs.length && (
+            <p className="text-sm text-ink/70">Sin jornadas registradas.</p>
           )}
         </div>
       </SectionCard>

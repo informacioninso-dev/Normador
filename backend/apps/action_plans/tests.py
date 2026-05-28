@@ -3,12 +3,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.action_plans.models import ActionPlan, Evidence
+from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 from apps.common.choices import (
     AIProvider,
     ActionPlanStatus,
@@ -18,6 +19,7 @@ from apps.common.choices import (
     EvidenceValidationStatus,
     FindingStatus,
     FindingType,
+    ImplementationActivityType,
     RequirementEvaluationStatus,
     ReviewType,
 )
@@ -36,6 +38,11 @@ from apps.standards.models import Standard, StandardRequirement
 class ActionPlanAndEvidenceApiTests(APITestCase):
     def setUp(self):
         super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username="phase5-user",
+            password="secret123",
+        )
+        self.client.force_authenticate(self.user)
         temp_root = Path(settings.BASE_DIR) / "test-media"
         temp_root.mkdir(parents=True, exist_ok=True)
         self.temp_media = temp_root / f"media-{uuid4().hex}"
@@ -128,6 +135,18 @@ class ActionPlanAndEvidenceApiTests(APITestCase):
         )
         self.assertEqual(invalid_close_response.status_code, status.HTTP_400_BAD_REQUEST)
 
+        start_response = self.client.post(
+            f"/api/action-plans/{action_plan.id}/start_progress/",
+            {},
+            format="json",
+        )
+        self.assertEqual(start_response.status_code, status.HTTP_200_OK)
+        action_plan.refresh_from_db()
+        self.assertEqual(action_plan.status, ActionPlanStatus.IN_PROGRESS)
+
+        activity = ImplementationActivity.objects.filter(action_plan=action_plan).latest("id")
+        self.assertEqual(activity.activity_type, ImplementationActivityType.START)
+
         evidence_response = self.client.post(
             "/api/evidences/",
             {
@@ -159,6 +178,18 @@ class ActionPlanAndEvidenceApiTests(APITestCase):
         self.assertEqual(self.checklist_item.status, ChecklistStatus.IMPLEMENTED)
         self.assertEqual(self.checklist_item.progress_percentage, 90)
 
+        resolve_response = self.client.post(
+            f"/api/action-plans/{action_plan.id}/resolve/",
+            {"completion_notes": "Se ejecuto el plan y se adjunto evidencia."},
+            format="json",
+        )
+        self.assertEqual(resolve_response.status_code, status.HTTP_200_OK)
+        action_plan.refresh_from_db()
+        self.assertEqual(action_plan.status, ActionPlanStatus.RESOLVED)
+
+        resolve_activity = ImplementationActivity.objects.filter(action_plan=action_plan).latest("id")
+        self.assertEqual(resolve_activity.activity_type, ImplementationActivityType.DELIVERABLE)
+
         close_response = self.client.post(
             f"/api/action-plans/{action_plan.id}/close_plan/",
             {"completion_notes": "Cierre validado por evidencia real."},
@@ -173,6 +204,38 @@ class ActionPlanAndEvidenceApiTests(APITestCase):
         self.assertEqual(finding.status, FindingStatus.CLOSED)
         self.assertEqual(self.checklist_item.status, ChecklistStatus.CLOSED)
         self.assertEqual(self.checklist_item.progress_percentage, 100)
+        close_activity = ImplementationActivity.objects.filter(action_plan=action_plan).latest("id")
+        self.assertEqual(close_activity.activity_type, ImplementationActivityType.CLOSURE)
+
+    def test_manual_implementation_activity_is_registered_for_action_plan(self):
+        action_plan = ActionPlan.objects.create(
+            project=self.project,
+            requirement=self.requirement,
+            checklist_item=self.checklist_item,
+            title="Seguimiento recepcion",
+            description="Pendiente operativo",
+        )
+
+        response = self.client.post(
+            "/api/implementation-activities/",
+            {
+                "action_plan": action_plan.id,
+                "activity_type": ImplementationActivityType.BLOCKER,
+                "title": "Proveedor no entrega formato",
+                "notes": "Sin formato aprobado para recepcion.",
+                "next_follow_up_on": "2026-06-02",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["project"], self.project.id)
+        self.assertEqual(response.data["requirement"], self.requirement.id)
+        self.assertEqual(response.data["checklist_item"], self.checklist_item.id)
+        self.assertEqual(response.data["activity_type"], ImplementationActivityType.BLOCKER)
+
+        action_plan.refresh_from_db()
+        self.assertEqual(action_plan.activities.count(), 1)
 
 
 @override_settings(
@@ -184,6 +247,11 @@ class ActionPlanAndEvidenceApiTests(APITestCase):
 class ActionPlanSupersedeTests(APITestCase):
     def setUp(self):
         super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username="supersede-user",
+            password="secret123",
+        )
+        self.client.force_authenticate(self.user)
         temp_root = Path(settings.BASE_DIR) / "test-media"
         temp_root.mkdir(parents=True, exist_ok=True)
         self.temp_media = temp_root / f"media-{uuid4().hex}"

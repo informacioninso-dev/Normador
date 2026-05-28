@@ -4,13 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const projectTabs = [
-  { href: "", label: "Resumen" },
-  { href: "/checklist", label: "Checklist" },
-  { href: "/documents", label: "Documentos" },
-  { href: "/reviews", label: "Revisiones" },
-  { href: "/action-plans", label: "Pendientes" },
-  { href: "/evidence", label: "Evidencia" },
-  { href: "/report", label: "Reporte" },
+  { href: "", label: "Implementacion" },
+  { href: "/daily-log", label: "Registro diario" },
 ];
 
 export function ProjectTabs({ projectId }: { projectId: number }) {

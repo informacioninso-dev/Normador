@@ -28,26 +28,71 @@ export default async function ProjectsPage({
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || data.errors[0]} />
 
-      <SectionCard title="Nuevo proyecto" description="Paso 2 del flujo.">
+      <SectionCard
+        title="Nuevo proyecto"
+        description="El proyecto es el eje del sistema. Si hace falta, crea la empresa aqui mismo."
+      >
         <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
           <form action={createProjectAction} className="space-y-3">
             <input type="hidden" name="return_path" value="/projects" />
             <input type="hidden" name="status" value="PLANNING" />
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                Empresa
-              </label>
-              <select name="company" required defaultValue="">
-                <option value="" disabled>
-                  Selecciona una empresa
-                </option>
-                {data.companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
+
+            <div className="rounded-[22px] border border-black/8 bg-sand/58 p-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                  Empresa
+                </label>
+                <p className="text-sm leading-6 text-ink/68">
+                  Usa una existente o crea una rapida sin salir de este flujo.
+                </p>
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                  Empresa existente
+                </label>
+                <select name="company" defaultValue="">
+                  <option value="">
+                    {data.companies.length
+                      ? "Selecciona una empresa"
+                      : "No hay empresas cargadas"}
                   </option>
-                ))}
-              </select>
+                  {data.companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-4 h-px bg-black/8" />
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                    Empresa nueva
+                  </label>
+                  <input name="company_name" placeholder="Laboratorio Andino" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                    RUC
+                  </label>
+                  <input name="company_ruc" placeholder="0999999999001" />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                  Industria
+                </label>
+                <input
+                  name="company_industry"
+                  placeholder="Opcional. Dispositivos medicos, alimentos o servicios."
+                />
+              </div>
             </div>
+
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                 Norma
@@ -63,12 +108,14 @@ export default async function ProjectsPage({
                 ))}
               </select>
             </div>
+
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                 Nombre
               </label>
               <input name="name" placeholder="Implementacion ISO 13485 - Planta Norte" required />
             </div>
+
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                 Alcance
@@ -79,6 +126,7 @@ export default async function ProjectsPage({
                 required
               />
             </div>
+
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
@@ -93,6 +141,7 @@ export default async function ProjectsPage({
                 <input type="date" name="target_date" />
               </div>
             </div>
+
             <SubmitButton label="Crear proyecto" pendingLabel="Creando..." className="w-full" />
           </form>
 
@@ -114,22 +163,22 @@ export default async function ProjectsPage({
 
             <div className="rounded-[24px] border border-black/8 bg-white/82 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
-                Siguiente
+                Empresa
               </p>
               <h3
                 className="mt-2 text-2xl font-bold text-ink"
                 style={{ fontFamily: "var(--font-display)" }}
               >
-                Cargar documentos
+                Alta rapida
               </h3>
               <p className="mt-3 text-sm leading-6 text-ink/72">
-                Despues de crear el proyecto, entra al detalle y sube el soporte inicial.
+                Si no seleccionas una existente, Normador crea la empresa en este mismo paso.
               </p>
               <Link
-                href={data.projects[0] ? `/projects/${data.projects[0].id}/documents` : "/projects"}
+                href="/companies"
                 className="mt-4 inline-flex rounded-full border border-black/8 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-sand"
               >
-                Ver ejemplo
+                Ver registro de empresas
               </Link>
             </div>
           </div>
@@ -144,7 +193,9 @@ export default async function ProjectsPage({
               const documentaryProgress = computeDocumentaryProgress(checklist);
               const implementationProgress = computeImplementationProgress(checklist);
               const openActionPlans = data.actionPlans.filter(
-                (plan) => plan.project === project.id && !["CERRADO", "SUPERSEDIDO"].includes(plan.status),
+                (plan) =>
+                  plan.project === project.id &&
+                  !["CERRADO", "SUPERSEDIDO"].includes(plan.status),
               ).length;
 
               return (
@@ -213,7 +264,7 @@ export default async function ProjectsPage({
                       <input type="hidden" name="return_path" value="/projects" />
                       <DeleteButton
                         label="Eliminar proyecto"
-                        confirmMessage={`¿Eliminar "${project.name}"? Se borrarán todos sus documentos, revisiones y planes. Esta acción no se puede deshacer.`}
+                        confirmMessage={`Eliminar "${project.name}"? Se borraran sus documentos, revisiones y planes. Esta accion no se puede deshacer.`}
                       />
                     </form>
                   )}

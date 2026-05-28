@@ -8,11 +8,13 @@ import type {
   DocumentReview,
   EvidenceRecord,
   Finding,
+  ImplementationActivity,
   Project,
   ProjectWorkspace,
   QueryValue,
   Standard,
   StandardRequirement,
+  WorkLogEntry,
 } from "./types";
 import { getAuthHeaders } from "./auth";
 
@@ -169,6 +171,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     findings,
     actionPlans,
     evidences,
+    worklogs,
   ] = await Promise.all([
     safeApiGet<Company[]>("/api/companies/", []),
     safeApiGet<Project[]>("/api/projects/", []),
@@ -179,6 +182,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     safeApiGet<Finding[]>("/api/findings/", []),
     safeApiGet<ActionPlan[]>("/api/action-plans/", []),
     safeApiGet<EvidenceRecord[]>("/api/evidences/", []),
+    safeApiGet<WorkLogEntry[]>("/api/worklogs/", []),
   ]);
 
   return {
@@ -191,6 +195,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     findings: findings.data,
     actionPlans: actionPlans.data,
     evidences: evidences.data,
+    worklogs: worklogs.data,
     errors: [
       companies.error,
       projects.error,
@@ -201,6 +206,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       findings.error,
       actionPlans.error,
       evidences.error,
+      worklogs.error,
     ].filter(Boolean) as string[],
   };
 }
@@ -292,7 +298,9 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
       reviews: [],
       findings: [],
       actionPlans: [],
+      implementationActivities: [],
       evidences: [],
+      worklogs: [],
       errors: [
         projectResponse.error ?? "No se encontro el proyecto solicitado.",
       ],
@@ -307,7 +315,9 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     reviews,
     findings,
     actionPlans,
+    implementationActivities,
     evidences,
+    worklogs,
   ] = await Promise.all([
     safeApiGet<Standard | null>(`/api/standards/${project.standard}/`, null),
     safeApiGet<StandardRequirement[]>("/api/requirements/", [], {
@@ -328,7 +338,13 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     safeApiGet<ActionPlan[]>("/api/action-plans/", [], {
       project: projectId,
     }),
+    safeApiGet<ImplementationActivity[]>("/api/implementation-activities/", [], {
+      project: projectId,
+    }),
     safeApiGet<EvidenceRecord[]>("/api/evidences/", [], {
+      project: projectId,
+    }),
+    safeApiGet<WorkLogEntry[]>("/api/worklogs/", [], {
       project: projectId,
     }),
   ]);
@@ -342,7 +358,9 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     reviews: reviews.data,
     findings: findings.data,
     actionPlans: actionPlans.data,
+    implementationActivities: implementationActivities.data,
     evidences: evidences.data,
+    worklogs: worklogs.data,
     errors: [
       projectResponse.error,
       standard.error,
@@ -352,7 +370,9 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
       reviews.error,
       findings.error,
       actionPlans.error,
+      implementationActivities.error,
       evidences.error,
+      worklogs.error,
     ].filter(Boolean) as string[],
   };
 }

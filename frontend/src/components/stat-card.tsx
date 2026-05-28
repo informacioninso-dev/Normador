@@ -8,7 +8,7 @@ export function StatCard({
   tone = "default",
 }: {
   eyebrow: string;
-  title: string;
+  title?: string;
   value: ReactNode;
   detail?: string;
   tone?: "default" | "accent" | "ink";
@@ -32,7 +32,7 @@ export function StatCard({
       </p>
       <div className="mt-3 flex items-end justify-between gap-4">
         <div>
-          <h3 className="text-sm font-medium opacity-80">{title}</h3>
+          {title ? <h3 className="text-sm font-medium opacity-80">{title}</h3> : null}
           <p className="mt-2 text-3xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
             {value}
           </p>

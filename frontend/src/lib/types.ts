@@ -192,6 +192,30 @@ export interface ActionPlan {
   created_by: number | null;
   evidence_count: number;
   validated_evidence_count: number;
+  activity_count: number;
+  latest_activity_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImplementationActivity {
+  id: number;
+  project: number;
+  project_name: string;
+  action_plan: number | null;
+  action_plan_title: string;
+  requirement: number | null;
+  requirement_title: string;
+  clause: string;
+  checklist_item: number | null;
+  checklist_item_title: string;
+  activity_type: string;
+  title: string;
+  notes: string;
+  happened_on: string;
+  next_follow_up_on: string | null;
+  created_by: number | null;
+  created_by_username: string;
   created_at: string;
   updated_at: string;
 }
@@ -227,6 +251,34 @@ export interface EvidenceRecord {
   updated_at: string;
 }
 
+export interface WorkLogEntry {
+  id: number;
+  project: number;
+  project_name: string;
+  action_plan: number | null;
+  action_plan_title: string;
+  consultant: number;
+  consultant_username: string;
+  work_date: string;
+  activity_type: string;
+  title: string;
+  summary: string;
+  deliverables: string;
+  start_time: string | null;
+  end_time: string | null;
+  logged_hours: string;
+  billable_hours: string;
+  approved_hours: string;
+  status: string;
+  review_notes: string;
+  approved_by: number | null;
+  approved_by_username: string;
+  approved_at: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AppUser {
   id: number;
   username: string;
@@ -249,6 +301,7 @@ export interface DashboardData {
   findings: Finding[];
   actionPlans: ActionPlan[];
   evidences: EvidenceRecord[];
+  worklogs: WorkLogEntry[];
   errors: string[];
 }
 
@@ -261,6 +314,8 @@ export interface ProjectWorkspace {
   reviews: DocumentReview[];
   findings: Finding[];
   actionPlans: ActionPlan[];
+  implementationActivities: ImplementationActivity[];
   evidences: EvidenceRecord[];
+  worklogs: WorkLogEntry[];
   errors: string[];
 }

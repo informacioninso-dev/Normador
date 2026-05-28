@@ -30,45 +30,25 @@ export default async function HomePage({
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || data.errors[0]} />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard eyebrow="Proyectos" title="Activos" value={data.projects.length} />
-        <StatCard
-          eyebrow="Documental"
-          title="Promedio"
-          value={`${portfolio.documentaryProgress}%`}
-        />
-        <StatCard
-          eyebrow="Implementacion"
-          title="Promedio"
-          value={`${portfolio.implementationProgress}%`}
-          tone="ink"
-        />
-        <StatCard eyebrow="Pendientes" title="Abiertos" value={portfolio.openPendingCount} tone="accent" />
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard eyebrow="Empresas" title="Registradas" value={data.companies.length} />
-        <StatCard eyebrow="Normas" title="Activas" value={data.standards.length} />
-        <StatCard eyebrow="Documentos" title="Cargados" value={data.documents.length} />
-        <StatCard eyebrow="Evidencia" title="Validada" value={portfolio.validatedEvidenceCount} />
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <StatCard eyebrow="Proyectos activos" value={data.projects.length} />
+        <StatCard eyebrow="Documental" value={`${portfolio.documentaryProgress}%`} />
+        <StatCard eyebrow="Implementacion" value={`${portfolio.implementationProgress}%`} tone="ink" />
+        <StatCard eyebrow="Pendientes" value={portfolio.openPendingCount} tone="accent" />
+        <StatCard eyebrow="Documentos" value={data.documents.length} />
+        <StatCard eyebrow="Evidencias" value={portfolio.validatedEvidenceCount} />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <SectionCard
-          title="Portfolio"
+          title="Proyectos"
           action={
             <div className="flex flex-wrap gap-2">
-              <Link
-                href="/companies"
-                className="rounded-full border border-black/8 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-sand"
-              >
-                Empresas
-              </Link>
               <Link
                 href="/projects"
                 className="rounded-full bg-signal px-4 py-2 text-sm font-semibold text-white transition hover:bg-signal/90"
               >
-                Proyectos
+                Ver todos
               </Link>
             </div>
           }
@@ -127,7 +107,7 @@ export default async function HomePage({
         </SectionCard>
 
         <div className="space-y-6">
-          <SectionCard title="En foco">
+          <SectionCard title="Riesgo">
             <div className="space-y-3">
               {atRiskProjects.length ? (
                 atRiskProjects.map((item) => (
@@ -145,10 +125,20 @@ export default async function HomePage({
                         value={item.openPendingCount > 0 ? "OBSERVADO" : "EN_REVISION"}
                       />
                     </div>
-                    <p className="mt-3 text-sm text-ink/70">
-                      {item.documentaryProgress}% documental - {item.openPendingCount} pendientes
-                      - {item.implementationProgress}% implementacion
-                    </p>
+                    <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Doc</p>
+                        <p className="mt-1 font-semibold text-ink">{item.documentaryProgress}%</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Pend.</p>
+                        <p className="mt-1 font-semibold text-ink">{item.openPendingCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Impl.</p>
+                        <p className="mt-1 font-semibold text-ink">{item.implementationProgress}%</p>
+                      </div>
+                    </div>
                   </Link>
                 ))
               ) : (
@@ -166,7 +156,7 @@ export default async function HomePage({
                       <div>
                         <p className="text-sm font-semibold text-ink">{plan.title}</p>
                         <p className="mt-1 text-xs uppercase tracking-[0.16em] text-moss">
-                          {plan.project_name} - {plan.clause || "Sin clause"}
+                          {plan.project_name} - {plan.clause || "Sin clausula"}
                         </p>
                       </div>
                       <StatusBadge value={plan.status} />

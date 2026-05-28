@@ -9,6 +9,7 @@ from apps.common.choices import (
     ActionPlanStatus,
     EvidenceType,
     EvidenceValidationStatus,
+    ImplementationActivityType,
     RiskLevel,
 )
 from apps.common.models import TimeStampedModel
@@ -85,6 +86,57 @@ class ActionPlan(TimeStampedModel):
 
     class Meta:
         ordering = ["status", "due_date", "-created_at", "-id"]
+
+    def __str__(self):
+        return self.title
+
+
+class ImplementationActivity(TimeStampedModel):
+    project = models.ForeignKey(
+        "implementation.Project",
+        on_delete=models.CASCADE,
+        related_name="implementation_activities",
+    )
+    action_plan = models.ForeignKey(
+        ActionPlan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities",
+    )
+    requirement = models.ForeignKey(
+        "standards.StandardRequirement",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="implementation_activities",
+    )
+    checklist_item = models.ForeignKey(
+        "implementation.ImplementationChecklistItem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="implementation_activities",
+    )
+    activity_type = models.CharField(
+        max_length=24,
+        choices=ImplementationActivityType.choices,
+        default=ImplementationActivityType.FOLLOW_UP,
+    )
+    title = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
+    happened_on = models.DateField(default=timezone.localdate)
+    next_follow_up_on = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="implementation_activities",
+    )
+
+    class Meta:
+        ordering = ["-happened_on", "-created_at", "-id"]
 
     def __str__(self):
         return self.title

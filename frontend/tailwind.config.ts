@@ -9,10 +9,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0e1420",
-        sand: "#f4efe6",
-        signal: "#c65f2b",
-        moss: "#54634f",
+        ink: "#1b2554",
+        sand: "#f4f7ff",
+        signal: "#4f7ed9",
+        moss: "#6b7fb0",
       },
     },
   },

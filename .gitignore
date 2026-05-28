@@ -30,6 +30,8 @@ Thumbs.db
 
 # Runtime logs
 runtime-logs/
+backend/*.log
+frontend/*.log
 
 # Temp / cache
 .tmp/

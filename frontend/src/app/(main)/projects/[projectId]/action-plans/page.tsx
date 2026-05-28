@@ -125,32 +125,42 @@ export default async function ProjectActionPlansPage({
                       {formatDate(plan.due_date)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    {plan.status === "PENDIENTE" && (
-                      <form action={transitionActionPlanAction}>
-                        <input type="hidden" name="return_path" value={returnPath} />
-                        <input type="hidden" name="action_plan_id" value={plan.id} />
-                        <input type="hidden" name="transition" value="start_progress" />
-                        <SubmitButton label="Iniciar" pendingLabel="..." />
-                      </form>
-                    )}
-                    {plan.status === "EN_PROGRESO" && (
-                      <form action={transitionActionPlanAction}>
-                        <input type="hidden" name="return_path" value={returnPath} />
-                        <input type="hidden" name="action_plan_id" value={plan.id} />
-                        <input type="hidden" name="transition" value="resolve" />
-                        <SubmitButton label="Resolver" pendingLabel="..." />
-                      </form>
-                    )}
-                    {plan.status === "RESUELTO" && (
-                      <form action={transitionActionPlanAction}>
-                        <input type="hidden" name="return_path" value={returnPath} />
-                        <input type="hidden" name="action_plan_id" value={plan.id} />
-                        <input type="hidden" name="transition" value="close_plan" />
-                        <SubmitButton label="Cerrar" pendingLabel="..." />
-                      </form>
-                    )}
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Seguimiento</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">
+                      {plan.activity_count} registros
+                    </p>
+                    <p className="mt-1 text-xs text-ink/60">
+                      Ultimo: {formatDate(plan.latest_activity_on)}
+                    </p>
                   </div>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  {plan.status === "PENDIENTE" && (
+                    <form action={transitionActionPlanAction}>
+                      <input type="hidden" name="return_path" value={returnPath} />
+                      <input type="hidden" name="action_plan_id" value={plan.id} />
+                      <input type="hidden" name="transition" value="start_progress" />
+                      <SubmitButton label="Iniciar" pendingLabel="..." />
+                    </form>
+                  )}
+                  {plan.status === "EN_PROGRESO" && (
+                    <form action={transitionActionPlanAction}>
+                      <input type="hidden" name="return_path" value={returnPath} />
+                      <input type="hidden" name="action_plan_id" value={plan.id} />
+                      <input type="hidden" name="transition" value="resolve" />
+                      <SubmitButton label="Resolver" pendingLabel="..." />
+                    </form>
+                  )}
+                  {plan.status === "RESUELTO" && (
+                    <form action={transitionActionPlanAction}>
+                      <input type="hidden" name="return_path" value={returnPath} />
+                      <input type="hidden" name="action_plan_id" value={plan.id} />
+                      <input type="hidden" name="transition" value="close_plan" />
+                      <SubmitButton label="Cerrar" pendingLabel="..." />
+                    </form>
+                  )}
                 </div>
               </article>
             ))

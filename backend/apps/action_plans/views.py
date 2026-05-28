@@ -1,10 +1,10 @@
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.action_plans.models import ActionPlan, Evidence
+from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 from apps.action_plans.serializers import (
     ActionPlanCreateSerializer,
     ActionPlanSerializer,
@@ -14,6 +14,8 @@ from apps.action_plans.serializers import (
     EvidenceSerializer,
     EvidenceUpdateSerializer,
     EvidenceValidationSerializer,
+    ImplementationActivityCreateSerializer,
+    ImplementationActivitySerializer,
 )
 from apps.action_plans.services import (
     close_action_plan,
@@ -44,6 +46,8 @@ class ActionPlanViewSet(viewsets.ModelViewSet):
                     "evidences",
                     filter=Q(evidences__status="VALIDADA"),
                 ),
+                activity_count=Count("activities", distinct=True),
+                latest_activity_on=Max("activities__happened_on"),
             )
             .order_by("status", "due_date", "-created_at", "-id")
         )
@@ -102,7 +106,10 @@ class ActionPlanViewSet(viewsets.ModelViewSet):
     def start_progress(self, request, pk=None):
         action_plan = self.get_object()
         try:
-            action_plan = start_action_plan(action_plan)
+            action_plan = start_action_plan(
+                action_plan,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ActionPlanSerializer(action_plan).data)
@@ -116,6 +123,7 @@ class ActionPlanViewSet(viewsets.ModelViewSet):
             action_plan = resolve_action_plan(
                 action_plan,
                 completion_notes=serializer.validated_data.get("completion_notes", ""),
+                created_by=request.user if request.user.is_authenticated else None,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -130,10 +138,62 @@ class ActionPlanViewSet(viewsets.ModelViewSet):
             action_plan = close_action_plan(
                 action_plan,
                 completion_notes=serializer.validated_data.get("completion_notes", ""),
+                created_by=request.user if request.user.is_authenticated else None,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ActionPlanSerializer(action_plan).data)
+
+
+class ImplementationActivityViewSet(viewsets.ModelViewSet):
+    queryset = ImplementationActivity.objects.none()
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = ImplementationActivity.objects.select_related(
+            "project",
+            "action_plan",
+            "requirement",
+            "checklist_item",
+            "created_by",
+        )
+        project_id = self.request.query_params.get("project")
+        action_plan_id = self.request.query_params.get("action_plan")
+        requirement_id = self.request.query_params.get("requirement")
+        activity_type = self.request.query_params.get("activity_type")
+
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        if action_plan_id:
+            queryset = queryset.filter(action_plan_id=action_plan_id)
+        if requirement_id:
+            queryset = queryset.filter(requirement_id=requirement_id)
+        if activity_type:
+            queryset = queryset.filter(activity_type=activity_type)
+
+        return queryset.order_by("-happened_on", "-created_at", "-id")
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return ImplementationActivityCreateSerializer
+        return ImplementationActivitySerializer
+
+    def perform_create(self, serializer):
+        serializer.save(
+            created_by=self.request.user if self.request.user.is_authenticated else None
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        activity = serializer.save(
+            created_by=request.user if request.user.is_authenticated else None
+        )
+        read_serializer = ImplementationActivitySerializer(
+            activity,
+            context=self.get_serializer_context(),
+        )
+        return Response(read_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class EvidenceViewSet(viewsets.ModelViewSet):

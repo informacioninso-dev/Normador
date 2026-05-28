@@ -30,7 +30,7 @@ export function ShellNav({ isStaff = false }: { isStaff?: boolean }) {
             className={[
               "rounded-2xl px-4 py-3 text-sm font-semibold transition",
               active
-                ? "bg-signal text-white shadow-[0_16px_32px_rgba(198,95,43,0.28)]"
+                ? "bg-signal text-white shadow-[0_16px_32px_rgba(79,126,217,0.28)]"
                 : "bg-white/70 text-ink hover:bg-white",
             ].join(" ")}
           >

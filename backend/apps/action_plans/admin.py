@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.action_plans.models import ActionPlan, Evidence
+from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 
 
 @admin.register(ActionPlan)
@@ -42,4 +42,27 @@ class EvidenceAdmin(admin.ModelAdmin):
         "document",
         "uploaded_by",
         "validated_by",
+    )
+
+
+@admin.register(ImplementationActivity)
+class ImplementationActivityAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "project",
+        "action_plan",
+        "activity_type",
+        "title",
+        "happened_on",
+        "next_follow_up_on",
+        "created_by",
+    )
+    list_filter = ("activity_type", "happened_on")
+    search_fields = ("title", "notes", "project__name", "action_plan__title")
+    autocomplete_fields = (
+        "project",
+        "action_plan",
+        "requirement",
+        "checklist_item",
+        "created_by",
     )

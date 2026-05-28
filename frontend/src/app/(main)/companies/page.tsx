@@ -22,7 +22,10 @@ export default async function CompaniesPage({
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || data.errors[0]} />
 
-      <SectionCard title="Nueva empresa" description="Paso 1 del flujo.">
+      <SectionCard
+        title="Empresas"
+        description="Registro administrativo. Tambien puedes crear una empresa al dar de alta un proyecto."
+      >
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <form action={createCompanyAction} className="space-y-3">
             <input type="hidden" name="return_path" value="/companies" />
@@ -42,24 +45,24 @@ export default async function CompaniesPage({
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                 Industria
               </label>
-              <input name="industry" placeholder="Dispositivos medicos" required />
+              <input name="industry" placeholder="Opcional" />
             </div>
-            <SubmitButton label="Crear empresa" pendingLabel="Guardando..." className="w-full" />
+            <SubmitButton label="Guardar empresa" pendingLabel="Guardando..." className="w-full" />
           </form>
 
           <div className="rounded-[24px] border border-black/8 bg-sand/72 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
-              Siguiente
+              Flujo principal
             </p>
             <h3
               className="mt-2 text-2xl font-bold text-ink"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              Crea el proyecto
+              Proyectos
             </h3>
             <p className="mt-3 text-sm leading-6 text-ink/72">
-              Cuando la empresa exista, pasa a proyectos para elegir la norma y generar el
-              checklist.
+              Si lo que quieres es operar, entra a proyectos. Desde ahi ya puedes crear la
+              empresa y abrir el checklist.
             </p>
             <Link
               href="/projects"
@@ -71,7 +74,7 @@ export default async function CompaniesPage({
         </div>
       </SectionCard>
 
-      <SectionCard title="Empresas" description="Base actual del workspace.">
+      <SectionCard title="Registro actual" description="Base de empresas del workspace.">
         {data.companies.length ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {data.companies.map((company) => {
@@ -83,7 +86,7 @@ export default async function CompaniesPage({
                   className="rounded-[24px] border border-black/8 bg-sand/75 p-5"
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
-                    {company.industry}
+                    {company.industry || "Sin industria"}
                   </p>
                   <h3
                     className="mt-2 text-2xl font-bold text-ink"
@@ -118,7 +121,7 @@ export default async function CompaniesPage({
                       <input type="hidden" name="return_path" value="/companies" />
                       <DeleteButton
                         label="Eliminar empresa"
-                        confirmMessage={`¿Eliminar "${company.name}"? Esta acción borrará todos sus proyectos y no se puede deshacer.`}
+                        confirmMessage={`Eliminar "${company.name}"? Esta accion borrara sus proyectos y no se puede deshacer.`}
                       />
                     </form>
                   )}
@@ -129,7 +132,7 @@ export default async function CompaniesPage({
         ) : (
           <EmptyState
             title="No hay empresas registradas"
-            description="Crea la primera para empezar con proyectos y checklist."
+            description="Puedes crear una aqui o dejar que nazcan desde el flujo de proyectos."
           />
         )}
       </SectionCard>

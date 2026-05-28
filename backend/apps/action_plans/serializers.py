@@ -2,7 +2,7 @@ from pathlib import Path
 
 from rest_framework import serializers
 
-from apps.action_plans.models import ActionPlan, Evidence
+from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 
 SUPPORTED_EVIDENCE_EXTENSIONS = {
     ".txt",
@@ -23,6 +23,8 @@ class ActionPlanSerializer(serializers.ModelSerializer):
     finding_type = serializers.CharField(source="finding.finding_type", read_only=True)
     evidence_count = serializers.SerializerMethodField()
     validated_evidence_count = serializers.SerializerMethodField()
+    activity_count = serializers.SerializerMethodField()
+    latest_activity_on = serializers.SerializerMethodField()
 
     def get_evidence_count(self, obj):
         return getattr(obj, "evidence_count", obj.evidences.count())
@@ -30,6 +32,16 @@ class ActionPlanSerializer(serializers.ModelSerializer):
     def get_validated_evidence_count(self, obj):
         validated = obj.evidences.filter(status="VALIDADA")
         return getattr(obj, "validated_evidence_count", validated.count())
+
+    def get_activity_count(self, obj):
+        return getattr(obj, "activity_count", obj.activities.count())
+
+    def get_latest_activity_on(self, obj):
+        latest = getattr(obj, "latest_activity_on", None)
+        if latest is not None:
+            return latest
+        record = obj.activities.order_by("-happened_on", "-created_at", "-id").first()
+        return record.happened_on if record else None
 
     class Meta:
         model = ActionPlan
@@ -58,6 +70,8 @@ class ActionPlanSerializer(serializers.ModelSerializer):
             "created_by",
             "evidence_count",
             "validated_evidence_count",
+            "activity_count",
+            "latest_activity_on",
             "created_at",
             "updated_at",
         ]
@@ -75,6 +89,8 @@ class ActionPlanSerializer(serializers.ModelSerializer):
             "created_by",
             "evidence_count",
             "validated_evidence_count",
+            "activity_count",
+            "latest_activity_on",
             "created_at",
             "updated_at",
         ]
@@ -179,6 +195,133 @@ class ActionPlanUpdateSerializer(serializers.ModelSerializer):
 
 class ActionPlanTransitionSerializer(serializers.Serializer):
     completion_notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class ImplementationActivitySerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    action_plan_title = serializers.CharField(source="action_plan.title", read_only=True)
+    requirement_title = serializers.CharField(source="requirement.title", read_only=True)
+    clause = serializers.CharField(source="requirement.clause", read_only=True)
+    checklist_item_title = serializers.CharField(source="checklist_item.title", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = ImplementationActivity
+        fields = [
+            "id",
+            "project",
+            "project_name",
+            "action_plan",
+            "action_plan_title",
+            "requirement",
+            "requirement_title",
+            "clause",
+            "checklist_item",
+            "checklist_item_title",
+            "activity_type",
+            "title",
+            "notes",
+            "happened_on",
+            "next_follow_up_on",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "project_name",
+            "action_plan_title",
+            "requirement_title",
+            "clause",
+            "checklist_item_title",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class ImplementationActivityCreateSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = ImplementationActivity
+        fields = [
+            "project",
+            "action_plan",
+            "requirement",
+            "checklist_item",
+            "activity_type",
+            "title",
+            "notes",
+            "happened_on",
+            "next_follow_up_on",
+        ]
+        extra_kwargs = {
+            "project": {"required": False},
+            "action_plan": {"required": False},
+            "requirement": {"required": False},
+            "checklist_item": {"required": False},
+            "happened_on": {"required": False},
+        }
+
+    def validate(self, attrs):
+        project = attrs.get("project")
+        action_plan = attrs.get("action_plan")
+        requirement = attrs.get("requirement")
+        checklist_item = attrs.get("checklist_item")
+
+        if action_plan:
+            if project and action_plan.project_id != project.id:
+                raise serializers.ValidationError(
+                    {"action_plan": "Action plan does not belong to the selected project."}
+                )
+            project = project or action_plan.project
+            requirement = requirement or action_plan.requirement
+            checklist_item = checklist_item or action_plan.checklist_item
+
+        if checklist_item and project and checklist_item.project_id != project.id:
+            raise serializers.ValidationError(
+                {"checklist_item": "Checklist item does not belong to the selected project."}
+            )
+
+        if requirement and project and requirement.standard_id != project.standard_id:
+            raise serializers.ValidationError(
+                {"requirement": "Requirement does not belong to the project's standard."}
+            )
+
+        if checklist_item and requirement and checklist_item.requirement_id != requirement.id:
+            raise serializers.ValidationError(
+                {
+                    "checklist_item": (
+                        "Checklist item does not match the selected requirement."
+                    )
+                }
+            )
+
+        if project is None:
+            raise serializers.ValidationError(
+                {"project": "Select a project or an action plan for this activity."}
+            )
+
+        attrs["project"] = project
+        if requirement:
+            attrs["requirement"] = requirement
+        if checklist_item:
+            attrs["checklist_item"] = checklist_item
+        return attrs
+
+    def create(self, validated_data):
+        if not validated_data.get("title"):
+            action_plan = validated_data.get("action_plan")
+            activity_type = validated_data.get("activity_type", "SEGUIMIENTO")
+            if action_plan:
+                validated_data["title"] = f"{activity_type.title()} - {action_plan.title}"
+            else:
+                validated_data["title"] = f"{activity_type.title()} de implementacion"
+        return super().create(validated_data)
 
 
 class EvidenceSerializer(serializers.ModelSerializer):

@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from rest_framework import status
@@ -67,6 +68,12 @@ class PilotDemoSeedCommandTests(DemoMediaRootMixin, TestCase):
 class PilotProgressReportApiTests(DemoMediaRootMixin, APITestCase):
     def setUp(self):
         super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username="pilot-api-user",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_authenticate(self.user)
         call_command("seed_demo_workspace", force_reset=True)
         self.project = Project.objects.get(name="Piloto ISO 13485 Demo")
 

@@ -1,10 +1,11 @@
 from django.utils import timezone
 
-from apps.action_plans.models import ActionPlan, Evidence
+from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 from apps.common.choices import (
     ActionPlanStatus,
     EvidenceValidationStatus,
     FindingStatus,
+    ImplementationActivityType,
     RequirementEvaluationStatus,
 )
 from apps.implementation.services import (
@@ -83,18 +84,54 @@ def ensure_action_plans_for_findings(findings: list[Finding], created_by=None) -
     return created_plans
 
 
-def start_action_plan(action_plan: ActionPlan) -> ActionPlan:
+def log_implementation_activity(
+    *,
+    action_plan: ActionPlan | None,
+    activity_type: str,
+    title: str,
+    notes: str = "",
+    created_by=None,
+    next_follow_up_on=None,
+) -> ImplementationActivity:
+    project = action_plan.project if action_plan is not None else None
+    requirement = action_plan.requirement if action_plan is not None else None
+    checklist_item = action_plan.checklist_item if action_plan is not None else None
+    return ImplementationActivity.objects.create(
+        project=project,
+        action_plan=action_plan,
+        requirement=requirement,
+        checklist_item=checklist_item,
+        activity_type=activity_type,
+        title=title,
+        notes=notes,
+        next_follow_up_on=next_follow_up_on,
+        created_by=created_by,
+    )
+
+
+def start_action_plan(action_plan: ActionPlan, *, created_by=None) -> ActionPlan:
     if action_plan.status in TERMINAL_ACTION_PLAN_STATUSES:
         raise ValueError("Action plan is already in a terminal status.")
 
     action_plan.status = ActionPlanStatus.IN_PROGRESS
     action_plan.save(update_fields=["status"])
+    log_implementation_activity(
+        action_plan=action_plan,
+        activity_type=ImplementationActivityType.START,
+        title="Plan iniciado",
+        created_by=created_by,
+    )
     _sync_finding_status(action_plan)
     _recalculate_from_action_plan(action_plan)
     return action_plan
 
 
-def resolve_action_plan(action_plan: ActionPlan, completion_notes: str = "") -> ActionPlan:
+def resolve_action_plan(
+    action_plan: ActionPlan,
+    completion_notes: str = "",
+    *,
+    created_by=None,
+) -> ActionPlan:
     if action_plan.status in TERMINAL_ACTION_PLAN_STATUSES:
         raise ValueError("Action plan is already in a terminal status.")
 
@@ -103,12 +140,24 @@ def resolve_action_plan(action_plan: ActionPlan, completion_notes: str = "") -> 
     if completion_notes:
         action_plan.completion_notes = completion_notes
     action_plan.save(update_fields=["status", "resolved_at", "completion_notes"])
+    log_implementation_activity(
+        action_plan=action_plan,
+        activity_type=ImplementationActivityType.DELIVERABLE,
+        title="Plan marcado como resuelto",
+        notes=completion_notes,
+        created_by=created_by,
+    )
     _sync_finding_status(action_plan)
     _recalculate_from_action_plan(action_plan)
     return action_plan
 
 
-def close_action_plan(action_plan: ActionPlan, completion_notes: str = "") -> ActionPlan:
+def close_action_plan(
+    action_plan: ActionPlan,
+    completion_notes: str = "",
+    *,
+    created_by=None,
+) -> ActionPlan:
     if action_plan.status in TERMINAL_ACTION_PLAN_STATUSES:
         raise ValueError("Action plan is already in a terminal status.")
 
@@ -128,6 +177,13 @@ def close_action_plan(action_plan: ActionPlan, completion_notes: str = "") -> Ac
             "closed_at",
             "completion_notes",
         ]
+    )
+    log_implementation_activity(
+        action_plan=action_plan,
+        activity_type=ImplementationActivityType.CLOSURE,
+        title="Plan cerrado",
+        notes=completion_notes,
+        created_by=created_by,
     )
     _sync_finding_status(action_plan)
     _recalculate_from_action_plan(action_plan)

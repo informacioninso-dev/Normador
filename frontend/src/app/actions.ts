@@ -54,8 +54,31 @@ export async function createProjectAction(formData: FormData) {
   const returnPath = ensureReturnPath(formData);
 
   try {
+    let companyId = numberValue(formData, "company");
+
+    if (!companyId) {
+      const companyName = textValue(formData, "company_name");
+      const companyRuc = textValue(formData, "company_ruc");
+
+      if (!companyName || !companyRuc) {
+        redirectWithMessage(
+          returnPath,
+          "error",
+          "Selecciona una empresa o crea una rapida con nombre y RUC.",
+        );
+      }
+
+      const company = await apiJsonMutation<{ id: number }>("/api/companies/", "POST", {
+        name: companyName,
+        ruc: companyRuc,
+        industry: textValue(formData, "company_industry"),
+      });
+
+      companyId = company.id;
+    }
+
     await apiJsonMutation("/api/projects/", "POST", {
-      company: numberValue(formData, "company"),
+      company: companyId,
       standard: numberValue(formData, "standard"),
       name: textValue(formData, "name"),
       scope: textValue(formData, "scope"),
@@ -168,6 +191,79 @@ export async function transitionActionPlanAction(formData: FormData) {
   }
 
   redirectWithMessage(returnPath, "success", "Plan de accion actualizado.");
+}
+
+export async function createImplementationActivityAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+
+  try {
+    await apiJsonMutation("/api/implementation-activities/", "POST", {
+      project: numberValue(formData, "project"),
+      action_plan: numberValue(formData, "action_plan"),
+      requirement: numberValue(formData, "requirement"),
+      checklist_item: numberValue(formData, "checklist_item"),
+      activity_type: textValue(formData, "activity_type") || "SEGUIMIENTO",
+      title: textValue(formData, "title"),
+      notes: textValue(formData, "notes"),
+      happened_on: textValue(formData, "happened_on") || null,
+      next_follow_up_on: textValue(formData, "next_follow_up_on") || null,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo registrar la actividad.";
+    redirectWithMessage(returnPath, "error", message);
+  }
+
+  redirectWithMessage(returnPath, "success", "Actividad registrada.");
+}
+
+export async function createWorklogAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+
+  try {
+    await apiJsonMutation("/api/worklogs/", "POST", {
+      project: numberValue(formData, "project"),
+      action_plan: numberValue(formData, "action_plan"),
+      work_date: textValue(formData, "work_date") || null,
+      activity_type: textValue(formData, "activity_type") || "IMPLEMENTACION",
+      title: textValue(formData, "title"),
+      summary: textValue(formData, "summary"),
+      deliverables: textValue(formData, "deliverables"),
+      start_time: textValue(formData, "start_time") || null,
+      end_time: textValue(formData, "end_time") || null,
+      logged_hours: textValue(formData, "logged_hours") || null,
+      billable_hours: textValue(formData, "billable_hours") || null,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo registrar la jornada.";
+    redirectWithMessage(returnPath, "error", message);
+  }
+
+  redirectWithMessage(returnPath, "success", "Jornada registrada.");
+}
+
+export async function reviewWorklogAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+  const worklogId = numberValue(formData, "worklog_id");
+  const transition = textValue(formData, "transition");
+
+  if (!worklogId || !transition) {
+    redirectWithMessage(returnPath, "error", "Faltan datos para revisar la jornada.");
+  }
+
+  try {
+    await apiJsonMutation(`/api/worklogs/${worklogId}/${transition}/`, "POST", {
+      approved_hours: textValue(formData, "approved_hours") || null,
+      review_notes: textValue(formData, "review_notes"),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo revisar la jornada.";
+    redirectWithMessage(returnPath, "error", message);
+  }
+
+  redirectWithMessage(returnPath, "success", "Jornada revisada.");
 }
 
 export async function createEvidenceAction(formData: FormData) {
