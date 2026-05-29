@@ -1,33 +1,74 @@
 import { notFound } from "next/navigation";
 
+import {
+  createEvidenceAction,
+  regenerateChecklistFromLibraryAction,
+  runReviewAction,
+  uploadDocumentAction,
+} from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { FlashBanner } from "@/components/flash-banner";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmitButton } from "@/components/submit-button";
 import { decodeFlash, getProjectWorkspace } from "@/lib/api";
 import { groupChecklistByArea } from "@/lib/metrics";
+import type { ChecklistItem } from "@/lib/types";
+
+const ITEM_TYPE_LABELS: Record<string, string> = {
+  DOCUMENTO: "Documento",
+  EVIDENCIA: "Evidencia",
+  ACTIVIDAD: "Actividad",
+  CONTROL: "Control",
+  DECISION: "Decision",
+};
+
+const DOCUMENT_TYPES = [
+  "POLITICA",
+  "PROCEDIMIENTO",
+  "FORMATO",
+  "REGISTRO",
+  "MATRIZ",
+  "INFORME",
+  "ACTA",
+  "EVIDENCIA",
+  "OTRO",
+];
+
+const EVIDENCE_TYPES = [
+  "REGISTRO_DILIGENCIADO",
+  "ACTA",
+  "INFORME",
+  "CAPACITACION",
+  "CONTROL_EJECUTADO",
+  "TRAZABILIDAD",
+  "OTRO",
+];
 
 const CRITICALITY_COLOR: Record<string, string> = {
-  ALTA: "bg-red-50 text-red-700 border-red-200",
-  MEDIA: "bg-amber-50 text-amber-700 border-amber-200",
-  BAJA: "bg-green-50 text-green-700 border-green-200",
+  ALTA: "border-red-200 bg-red-50 text-red-700",
+  MEDIA: "border-amber-200 bg-amber-50 text-amber-700",
+  BAJA: "border-green-200 bg-green-50 text-green-700",
 };
 
-const DOC_STATUS_COLOR: Record<string, string> = {
-  CARGADO: "text-ink/50",
-  PROCESANDO: "text-blue-600",
-  LISTO: "text-green-700",
-  FALLIDO: "text-red-600",
-  ARCHIVADO: "text-ink/30",
-};
+function firstItems(values: string[], limit = 4) {
+  if (!values.length) return ["Criterio definido por el requisito."];
+  return values.slice(0, limit);
+}
 
-const DOC_STATUS_LABEL: Record<string, string> = {
-  CARGADO: "Cargado",
-  PROCESANDO: "Procesando",
-  LISTO: "Listo",
-  FALLIDO: "Fallido",
-  ARCHIVADO: "Archivado",
-};
+function itemCompletionHints(item: ChecklistItem) {
+  const hints = [];
+  if (item.requires_document) {
+    hints.push(`Documento: ${item.required_document_type || "OTRO"}`);
+  }
+  if (item.requires_evidence) {
+    hints.push(`Evidencia: ${item.required_evidence_type || "OTRO"}`);
+  }
+  if (!hints.length) {
+    hints.push("Actividad verificable");
+  }
+  return hints;
+}
 
 export default async function ProjectChecklistPage({
   params,
@@ -46,272 +87,288 @@ export default async function ProjectChecklistPage({
   const workspace = await getProjectWorkspace(projectId);
   if (!workspace.project) notFound();
 
+  const returnPath = `/projects/${projectId}/checklist`;
   const groupedAreas = groupChecklistByArea(workspace.checklistItems);
+  const reqById = Object.fromEntries(workspace.requirements.map((requirement) => [requirement.id, requirement]));
 
-  // Index requirements by id for quick lookup
-  const reqById = Object.fromEntries(workspace.requirements.map((r) => [r.id, r]));
-
-  // Summary counts
   const total = workspace.checklistItems.length;
-  const closed = workspace.checklistItems.filter((i) => i.status === "CERRADO").length;
-  const partial = workspace.checklistItems.filter((i) =>
-    ["VALIDADO_DOCUMENTALMENTE", "EN_PROGRESO"].includes(i.status),
-  ).length;
-  const pending = total - closed - partial;
+  const closed = workspace.checklistItems.filter((item) => item.status === "CERRADO").length;
+  const documentTasks = workspace.checklistItems.filter((item) => item.requires_document).length;
+  const evidenceTasks = workspace.checklistItems.filter((item) => item.requires_evidence).length;
+
+  const kpis = [
+    { label: "Items", value: total },
+    { label: "Cerrados", value: closed },
+    { label: "Con documento", value: documentTasks },
+    { label: "Con evidencia", value: evidenceTasks },
+  ];
 
   return (
     <div className="space-y-5">
       <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
 
-      {/* Summary bar */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-[20px] border border-black/8 bg-white/80 px-4 py-4 text-center">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Cerrados</p>
-          <p className="mt-1 text-2xl font-bold text-green-700">{closed}</p>
-          <p className="text-xs text-ink/40">de {total}</p>
+      <section className="ui-surface rounded-[22px] p-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              Checklist operativo
+            </p>
+            <p className="mt-1 text-sm leading-6 text-ink/70">
+              El checklist define cosas que deben implementarse, no solo documentos. Cuando
+              un item requiere politica, manual, POE o registro, subelo desde el item y ejecuta
+              revision AI contra norma, RAG y contexto.
+            </p>
+          </div>
+          <form action={regenerateChecklistFromLibraryAction} className="md:min-w-[260px]">
+            <input type="hidden" name="return_path" value={returnPath} />
+            <input type="hidden" name="project_id" value={projectId} />
+            <SubmitButton
+              label="Actualizar desde biblioteca"
+              pendingLabel="Actualizando..."
+              className="w-full"
+            />
+          </form>
         </div>
-        <div className="rounded-[20px] border border-black/8 bg-white/80 px-4 py-4 text-center">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink/45">En progreso</p>
-          <p className="mt-1 text-2xl font-bold text-amber-600">{partial}</p>
-          <p className="text-xs text-ink/40">con soporte parcial</p>
-        </div>
-        <div className="rounded-[20px] border border-black/8 bg-white/80 px-4 py-4 text-center">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Pendientes</p>
-          <p className="mt-1 text-2xl font-bold text-signal">{pending}</p>
-          <p className="text-xs text-ink/40">sin documentos</p>
-        </div>
-      </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {kpis.map((item) => (
+          <div key={item.label} className="ui-card rounded-[18px] p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{item.label}</p>
+            <p className="mt-2 text-2xl font-bold text-ink">{item.value}</p>
+          </div>
+        ))}
+      </section>
 
       {Object.keys(groupedAreas).length ? (
         Object.entries(groupedAreas).map(([area, items]) => {
-          const areaClosed = items.filter((i) => i.status === "CERRADO").length;
+          const areaClosed = items.filter((item) => item.status === "CERRADO").length;
           const pct = Math.round((areaClosed / items.length) * 100);
 
           return (
             <SectionCard
               key={area}
               title={area}
-              description={`${areaClosed} de ${items.length} requisitos cerrados — ${pct}% completado`}
+              description={`${areaClosed} de ${items.length} cerrados - ${pct}% completado`}
             >
               <div className="space-y-4">
                 {items.map((item) => {
-                  const req = reqById[item.requirement];
+                  const requirement = reqById[item.requirement];
                   const itemDocs = workspace.documents.filter(
-                    (d) => d.checklist_item === item.id,
+                    (document) =>
+                      document.checklist_item === item.id ||
+                      document.requirement === item.requirement,
                   );
+                  const readyDocs = itemDocs.filter((document) => document.status === "LISTO");
                   const itemEvidences = workspace.evidences.filter(
-                    (e) => e.checklist_item === item.id,
+                    (evidence) =>
+                      evidence.checklist_item === item.id ||
+                      evidence.requirement === item.requirement,
                   );
                   const openPlans = workspace.actionPlans.filter(
-                    (p) =>
-                      p.checklist_item === item.id &&
-                      !["CERRADO", "SUPERSEDIDO"].includes(p.status),
+                    (plan) =>
+                      plan.checklist_item === item.id &&
+                      !["CERRADO", "SUPERSEDIDO"].includes(plan.status),
+                  );
+                  const latestReview = workspace.reviews.find((review) =>
+                    review.requirement_evaluations.some(
+                      (evaluation) => evaluation.requirement === item.requirement,
+                    ),
                   );
 
-                  const expectedDocs: string[] = req?.expected_documents ?? [];
-                  const expectedEvidence: string[] = req?.expected_evidence ?? [];
-                  const verificationQs: string[] = req?.verification_questions ?? [];
-
-                  const isClosed = item.status === "CERRADO";
-
                   return (
-                    <details
-                      key={item.id}
-                      className={[
-                        "group rounded-[24px] border bg-white/78",
-                        isClosed ? "border-green-200/60" : "border-black/8",
-                      ].join(" ")}
-                      open={!isClosed}
-                    >
-                      {/* Summary row — always visible */}
-                      <summary className="flex cursor-pointer list-none items-start gap-4 p-5">
-                        <div className="mt-0.5 flex-1 min-w-0">
+                    <article key={item.id} className="ui-card rounded-[24px] p-4 md:p-5">
+                      <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+                        <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold uppercase tracking-[0.16em] text-moss">
+                            <span className="rounded-full bg-ink px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-sand">
                               {item.clause}
                             </span>
                             <span
                               className={[
-                                "rounded-full border px-2 py-0.5 text-xs font-semibold",
-                                CRITICALITY_COLOR[item.criticality] ?? "bg-sand text-ink/60 border-black/8",
+                                "rounded-full border px-3 py-1 text-xs font-semibold",
+                                CRITICALITY_COLOR[item.criticality] ??
+                                  "border-signal/16 bg-white text-ink/70",
                               ].join(" ")}
                             >
                               {item.criticality}
                             </span>
-                            {item.is_not_applicable && (
-                              <span className="rounded-full bg-ink/8 px-2 py-0.5 text-xs font-semibold text-ink/50">
-                                No aplica
-                              </span>
-                            )}
+                            <span className="ui-pill rounded-full px-3 py-1 text-xs font-semibold text-ink/70">
+                              {ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}
+                            </span>
+                            <StatusBadge value={item.status} />
                           </div>
-                          <h3 className="mt-1.5 text-base font-semibold text-ink leading-snug">
+
+                          <h3
+                            className="mt-3 text-xl font-bold leading-tight text-ink"
+                            style={{ fontFamily: "var(--font-display)" }}
+                          >
                             {item.title}
                           </h3>
-                          {/* Mini doc pill count */}
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-ink/50">
-                            <span>{itemDocs.length} doc{itemDocs.length !== 1 ? "s" : ""} subidos</span>
-                            <span>·</span>
-                            <span>{itemEvidences.length} evidencias</span>
-                            {openPlans.length > 0 && (
-                              <>
-                                <span>·</span>
-                                <span className="text-signal font-semibold">{openPlans.length} pendientes</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0">
-                          <StatusBadge value={item.status} />
-                        </div>
-                      </summary>
 
-                      {/* Expanded body */}
-                      <div className="border-t border-black/6 px-5 pb-5 pt-4 space-y-5">
-                        {/* Description */}
-                        {item.description && (
-                          <p className="text-sm leading-6 text-ink/70">{item.description}</p>
-                        )}
+                          <p className="mt-3 text-sm leading-6 text-ink/72">
+                            {item.implementation_task || item.description}
+                          </p>
 
-                        <div className="grid gap-5 md:grid-cols-2">
-                          {/* Documentos esperados vs subidos */}
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                              Documentos requeridos
-                            </p>
-                            <div className="space-y-1.5">
-                              {expectedDocs.length ? (
-                                expectedDocs.map((docName, idx) => {
-                                  // Check if any uploaded doc title loosely matches
-                                  const matched = itemDocs.some((d) =>
-                                    d.title.toLowerCase().includes(docName.toLowerCase().slice(0, 8)),
-                                  );
-                                  return (
-                                    <div key={idx} className="flex items-start gap-2">
-                                      <span className={matched ? "text-green-600" : "text-ink/25"}>
-                                        {matched ? "✓" : "○"}
-                                      </span>
-                                      <span className={["text-sm", matched ? "text-ink/70" : "text-ink/55"].join(" ")}>
-                                        {docName}
-                                      </span>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <p className="text-sm text-ink/40">Sin lista específica definida.</p>
-                              )}
-                            </div>
-
-                            {/* Tipo requerido */}
-                            <div className="mt-3 flex flex-wrap gap-3">
-                              {item.required_document_type && (
-                                <div className="rounded-[14px] bg-sand/80 px-3 py-2">
-                                  <p className="text-xs uppercase tracking-[0.14em] text-ink/40">Tipo doc.</p>
-                                  <p className="mt-0.5 text-xs font-semibold text-ink">{item.required_document_type}</p>
-                                </div>
-                              )}
-                              {item.required_evidence_type && (
-                                <div className="rounded-[14px] bg-sand/80 px-3 py-2">
-                                  <p className="text-xs uppercase tracking-[0.14em] text-ink/40">Tipo evidencia</p>
-                                  <p className="mt-0.5 text-xs font-semibold text-ink">{item.required_evidence_type}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Documentos subidos */}
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                              Documentos subidos ({itemDocs.length})
-                            </p>
-                            {itemDocs.length ? (
-                              <div className="space-y-2">
-                                {itemDocs.map((doc) => (
-                                  <div
-                                    key={doc.id}
-                                    className="flex items-center justify-between gap-2 rounded-[14px] bg-sand/60 px-3 py-2"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate text-sm font-semibold text-ink" title={doc.title}>
-                                        {doc.title}
-                                      </p>
-                                      <p className="text-xs text-ink/40">{doc.document_type} · {doc.file_extension}</p>
-                                    </div>
-                                    <span className={["text-xs font-semibold shrink-0", DOC_STATUS_COLOR[doc.status] ?? ""].join(" ")}>
-                                      {DOC_STATUS_LABEL[doc.status] ?? doc.status}
-                                    </span>
-                                  </div>
-                                ))}
+                          <div className="mt-4 grid gap-3 md:grid-cols-3">
+                            {itemCompletionHints(item).map((hint) => (
+                              <div key={hint} className="ui-muted rounded-[14px] px-3 py-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-moss">
+                                  Requiere
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-ink">{hint}</p>
                               </div>
-                            ) : (
-                              <p className="text-sm text-ink/40">Ningún documento subido aún.</p>
-                            )}
+                            ))}
                           </div>
                         </div>
 
-                        {/* Evidencia esperada */}
-                        {expectedEvidence.length > 0 && (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                              Evidencia de implementación requerida
+                        <div className="grid gap-3">
+                          <div className="ui-muted rounded-[18px] p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                              Soporte
                             </p>
-                            <div className="flex flex-wrap gap-2">
-                              {expectedEvidence.map((ev, idx) => {
-                                const matched = itemEvidences.some((e) =>
-                                  e.title?.toLowerCase().includes(ev.toLowerCase().slice(0, 8)),
-                                );
-                                return (
-                                  <span
-                                    key={idx}
-                                    className={[
-                                      "rounded-full px-3 py-1 text-xs font-semibold border",
-                                      matched
-                                        ? "bg-green-50 text-green-700 border-green-200"
-                                        : "bg-sand/80 text-ink/60 border-black/8",
-                                    ].join(" ")}
-                                  >
-                                    {matched ? "✓ " : ""}{ev}
-                                  </span>
-                                );
-                              })}
+                            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                              <div>
+                                <p className="text-lg font-bold text-ink">{itemDocs.length}</p>
+                                <p className="text-[11px] text-ink/50">Docs</p>
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold text-ink">{itemEvidences.length}</p>
+                                <p className="text-[11px] text-ink/50">Evid.</p>
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold text-ink">{openPlans.length}</p>
+                                <p className="text-[11px] text-ink/50">Pend.</p>
+                              </div>
                             </div>
                           </div>
-                        )}
 
-                        {/* Preguntas de verificación */}
-                        {verificationQs.length > 0 && (
-                          <details className="rounded-[16px] bg-sand/50 px-4 py-3">
-                            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                              Preguntas de verificación ({verificationQs.length})
-                            </summary>
-                            <ul className="mt-3 space-y-2">
-                              {verificationQs.map((q, idx) => (
-                                <li key={idx} className="flex gap-2 text-sm text-ink/70">
-                                  <span className="shrink-0 font-semibold text-moss">{idx + 1}.</span>
-                                  <span>{q}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-
-                        {/* Pendientes abiertos */}
-                        {openPlans.length > 0 && (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-signal">
-                              Planes de acción abiertos ({openPlans.length})
-                            </p>
-                            <div className="space-y-2">
-                              {openPlans.map((plan) => (
-                                <div key={plan.id} className="rounded-[14px] border border-signal/20 bg-signal/5 px-3 py-2">
-                                  <p className="text-sm font-semibold text-ink">{plan.title}</p>
-                                  <p className="mt-0.5 text-xs text-ink/55">{plan.recommended_action}</p>
-                                </div>
-                              ))}
+                          {latestReview ? (
+                            <div className="ui-muted rounded-[18px] p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                                Ultima revision AI
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <StatusBadge value={latestReview.overall_status} />
+                                <StatusBadge value={latestReview.risk_level} />
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          ) : null}
+                        </div>
                       </div>
-                    </details>
+
+                      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+                        <div className="ui-panel rounded-[18px] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                            Criterios de aceptacion
+                          </p>
+                          <ul className="mt-3 space-y-2">
+                            {firstItems(item.acceptance_criteria).map((criterion) => (
+                              <li key={criterion} className="flex gap-2 text-sm leading-6 text-ink/72">
+                                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-signal" />
+                                <span>{criterion}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="ui-panel rounded-[18px] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                            Documentos y revision AI
+                          </p>
+                          {item.requires_document ? (
+                            <>
+                              <form action={uploadDocumentAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                                <input type="hidden" name="return_path" value={returnPath} />
+                                <input type="hidden" name="project" value={projectId} />
+                                <input type="hidden" name="requirement" value={item.requirement} />
+                                <input type="hidden" name="checklist_item" value={item.id} />
+                                <input type="hidden" name="auto_review" value="1" />
+                                <input name="title" placeholder="Politica, manual, POE o registro" />
+                                <select name="document_type" defaultValue={item.required_document_type || "OTRO"}>
+                                  {DOCUMENT_TYPES.map((type) => (
+                                    <option key={type} value={type}>
+                                      {type}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required />
+                                <SubmitButton label="Subir y comparar" pendingLabel="Procesando..." className="w-full" />
+                              </form>
+
+                              {readyDocs.length ? (
+                                <form action={runReviewAction} className="mt-3 space-y-2">
+                                  <input type="hidden" name="return_path" value={returnPath} />
+                                  <input type="hidden" name="review_type" value="CUMPLIMIENTO_NORMATIVO" />
+                                  <input type="hidden" name="requirement" value={item.requirement} />
+                                  <select name="document" defaultValue={readyDocs[0].id}>
+                                    {readyDocs.map((document) => (
+                                      <option key={document.id} value={document.id}>
+                                        Revisar: {document.title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <SubmitButton label="Comparar con AI" pendingLabel="Revisando..." className="w-full" />
+                                </form>
+                              ) : (
+                                <p className="mt-3 text-sm leading-6 text-ink/60">
+                                  Sube un documento para habilitar la comparacion con AI.
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="mt-3 text-sm leading-6 text-ink/60">
+                              Este item no exige documento formal; puede cerrarse con actividad o evidencia.
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="ui-panel rounded-[18px] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                            Evidencia operativa
+                          </p>
+                          {item.requires_evidence ? (
+                            <form action={createEvidenceAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                              <input type="hidden" name="return_path" value={returnPath} />
+                              <input type="hidden" name="project" value={projectId} />
+                              <input type="hidden" name="requirement" value={item.requirement} />
+                              <input type="hidden" name="checklist_item" value={item.id} />
+                              <input name="title" placeholder="Registro, foto, acta o soporte" required />
+                              <select name="evidence_type" defaultValue={item.required_evidence_type || "OTRO"}>
+                                {EVIDENCE_TYPES.map((type) => (
+                                  <option key={type} value={type}>
+                                    {type}
+                                  </option>
+                                ))}
+                              </select>
+                              <input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt,.jpg,.jpeg,.png" />
+                              <SubmitButton label="Subir evidencia" pendingLabel="Guardando..." className="w-full" />
+                            </form>
+                          ) : (
+                            <p className="mt-3 text-sm leading-6 text-ink/60">
+                              No requiere evidencia operativa adicional segun el criterio actual.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <details className="mt-4 rounded-[18px] bg-[#eef4ff] px-4 py-3">
+                        <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                          Criterio AI y preguntas de verificacion
+                        </summary>
+                        <p className="mt-3 text-sm leading-6 text-ink/72">
+                          {item.ai_review_focus || requirement?.requirement_text}
+                        </p>
+                        <ul className="mt-3 space-y-2">
+                          {firstItems(item.review_questions, 6).map((question) => (
+                            <li key={question} className="flex gap-2 text-sm leading-6 text-ink/70">
+                              <span className="font-bold text-signal">?</span>
+                              <span>{question}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </article>
                   );
                 })}
               </div>
@@ -319,10 +376,10 @@ export default async function ProjectChecklistPage({
           );
         })
       ) : (
-        <SectionCard title="Checklist normativo" description="">
+        <SectionCard title="Checklist operativo">
           <EmptyState
             title="No hay items en checklist"
-            description="Verifica que el proyecto tenga norma asociada y que el seed de requisitos se haya cargado."
+            description="Actualiza desde biblioteca o verifica que el proyecto tenga una norma asociada."
           />
         </SectionCard>
       )}

@@ -15,15 +15,15 @@ export function StatCard({
 }) {
   const toneClass =
     tone === "accent"
-      ? "bg-signal text-white"
+      ? "border-signal/20 bg-signal text-white shadow-[0_18px_40px_rgba(79,126,217,0.22)]"
       : tone === "ink"
-        ? "bg-ink text-sand"
-        : "bg-white/85 text-ink";
+        ? "border-ink/10 bg-ink text-sand shadow-[0_18px_40px_rgba(27,37,84,0.2)]"
+        : "ui-card text-ink";
 
   return (
     <article
       className={[
-        "rounded-[24px] border border-black/8 p-4 shadow-[0_16px_40px_rgba(14,20,32,0.07)]",
+        "rounded-[22px] border p-4",
         toneClass,
       ].join(" ")}
     >

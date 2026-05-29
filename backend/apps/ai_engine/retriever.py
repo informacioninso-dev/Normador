@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from django.conf import settings
+from django.db.models import Q
 
 from apps.ai_engine.embeddings import EmbeddingProvider, get_default_embedding_provider
 from apps.common.choices import EmbeddingStatus
@@ -25,6 +26,9 @@ def search_chunks(
     document_type: str | None = None,
     library_only: bool = False,
     include_library: bool = False,
+    library_usage: str | None = None,
+    library_kind: str | None = None,
+    process_area: str | None = None,
     limit: int | None = None,
 ) -> list[RetrievalResult]:
     """Search document chunks by semantic similarity.
@@ -49,14 +53,28 @@ def search_chunks(
     queryset = DocumentChunk.objects.select_related(
         "document",
         "document__project",
+        "document__library_standard",
+        "document__library_company",
+        "document__library_project",
         "document__requirement",
         "document__checklist_item",
     ).filter(embedding_status=EmbeddingStatus.READY)
 
     if library_only:
         queryset = queryset.filter(document__is_reference=True)
+        queryset = _filter_library_scope(
+            queryset,
+            project_id=project_id,
+            standard_id=standard_id,
+        )
+        if library_kind:
+            queryset = queryset.filter(document__library_kind=library_kind)
+        if process_area:
+            queryset = queryset.filter(
+                Q(document__process_area__iexact=process_area)
+                | Q(document__process_area="")
+            )
     elif include_library:
-        from django.db.models import Q
         library_q = Q(document__is_reference=True)
         project_q = Q()
         if project_id:
@@ -84,6 +102,8 @@ def search_chunks(
 
     scored_results: list[RetrievalResult] = []
     for chunk in queryset:
+        if not _library_usage_allowed(chunk, library_usage):
+            continue
         vector = np.array(chunk.embedding or [], dtype=float)
         if vector.size == 0 or vector.shape[0] != query_vector.shape[0]:
             continue
@@ -97,3 +117,29 @@ def search_chunks(
 
     scored_results.sort(key=lambda item: item.score, reverse=True)
     return scored_results[: limit or settings.SEMANTIC_SEARCH_TOP_K]
+
+
+def _filter_library_scope(queryset, *, project_id: int | None, standard_id: int | None):
+    scope = Q(document__library_standard__isnull=True) & Q(document__library_company__isnull=True) & Q(document__library_project__isnull=True)
+
+    project = None
+    if project_id:
+        from apps.implementation.models import Project
+
+        project = Project.objects.filter(id=project_id).only("id", "company_id", "standard_id").first()
+        if project:
+            standard_id = standard_id or project.standard_id
+            scope |= Q(document__library_project_id=project.id)
+            scope |= Q(document__library_company_id=project.company_id)
+
+    if standard_id:
+        scope |= Q(document__library_standard_id=standard_id)
+
+    return queryset.filter(scope)
+
+
+def _library_usage_allowed(chunk: DocumentChunk, library_usage: str | None) -> bool:
+    if not library_usage or not chunk.document.is_reference:
+        return True
+    usages = chunk.document.library_usages or []
+    return not usages or library_usage in usages or "GENERAL" in usages

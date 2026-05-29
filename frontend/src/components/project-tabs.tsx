@@ -12,7 +12,7 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
   const pathname = usePathname();
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {projectTabs.map((tab) => {
         const href = `/projects/${projectId}${tab.href}`;
         const active = pathname === href;
@@ -24,8 +24,8 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
             className={[
               "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition",
               active
-                ? "bg-ink text-sand"
-                : "bg-white/75 text-ink/70 hover:bg-white hover:text-ink",
+                ? "ui-pill-active"
+                : "ui-pill text-ink/70 hover:bg-[#edf3ff] hover:text-ink",
             ].join(" ")}
           >
             {tab.label}

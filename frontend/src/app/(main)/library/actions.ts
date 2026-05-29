@@ -25,10 +25,31 @@ export async function uploadReferenceDocumentAction(formData: FormData) {
   const payload = new FormData();
   payload.set("is_reference", "true");
   payload.set("file", file);
+
   const title = textValue(formData, "title");
   if (title) payload.set("title", title);
+
   const documentType = textValue(formData, "document_type");
   if (documentType) payload.set("document_type", documentType);
+
+  const libraryKind = textValue(formData, "library_kind");
+  if (libraryKind) payload.set("library_kind", libraryKind);
+
+  for (const field of [
+    "library_standard",
+    "library_company",
+    "library_project",
+    "process_area",
+  ]) {
+    const value = textValue(formData, field);
+    if (value) payload.set(field, value);
+  }
+
+  for (const usage of formData.getAll("library_usages")) {
+    if (typeof usage === "string" && usage.trim()) {
+      payload.append("library_usages", usage.trim());
+    }
+  }
 
   try {
     await apiFormMutation("/api/documents/", "POST", payload);

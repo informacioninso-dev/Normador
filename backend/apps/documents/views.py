@@ -30,6 +30,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Document.objects.select_related(
             "project",
+            "library_standard",
+            "library_company",
+            "library_project",
             "requirement",
             "checklist_item",
             "uploaded_by",
@@ -39,7 +42,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if not user.is_staff:
             from django.db.models import Q
             queryset = queryset.filter(
-                Q(is_reference=True) | Q(project__created_by=user)
+                Q(is_reference=True) | Q(project__company__created_by=user)
             )
 
         project_id = self.request.query_params.get("project")
@@ -48,6 +51,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
         status_code = self.request.query_params.get("status")
         checklist_item_id = self.request.query_params.get("checklist_item")
         requirement_id = self.request.query_params.get("requirement")
+        library_standard_id = self.request.query_params.get("library_standard")
+        library_company_id = self.request.query_params.get("library_company")
+        library_project_id = self.request.query_params.get("library_project")
+        library_kind = self.request.query_params.get("library_kind")
+        library_usage = self.request.query_params.get("library_usage")
+        process_area = self.request.query_params.get("process_area")
 
         if project_id:
             queryset = queryset.filter(project_id=project_id)
@@ -61,6 +70,23 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(checklist_item_id=checklist_item_id)
         if requirement_id:
             queryset = queryset.filter(requirement_id=requirement_id)
+        if library_standard_id:
+            queryset = queryset.filter(library_standard_id=library_standard_id)
+        if library_company_id:
+            queryset = queryset.filter(library_company_id=library_company_id)
+        if library_project_id:
+            queryset = queryset.filter(library_project_id=library_project_id)
+        if library_kind:
+            queryset = queryset.filter(library_kind=library_kind)
+        if library_usage:
+            matching_ids = [
+                document.id
+                for document in queryset
+                if _library_usage_allowed(document, library_usage)
+            ]
+            queryset = Document.objects.filter(id__in=matching_ids)
+        if process_area:
+            queryset = queryset.filter(process_area__iexact=process_area)
 
         return queryset.order_by("-uploaded_at", "-id")
 
@@ -123,6 +149,13 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
         requirement_id = self.request.query_params.get("requirement")
         status_code = self.request.query_params.get("embedding_status")
         document_type = self.request.query_params.get("document_type")
+        is_reference = self.request.query_params.get("is_reference")
+        library_standard_id = self.request.query_params.get("library_standard")
+        library_company_id = self.request.query_params.get("library_company")
+        library_project_id = self.request.query_params.get("library_project")
+        library_kind = self.request.query_params.get("library_kind")
+        library_usage = self.request.query_params.get("library_usage")
+        process_area = self.request.query_params.get("process_area")
 
         if project_id:
             queryset = queryset.filter(document__project_id=project_id)
@@ -134,6 +167,25 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(embedding_status=status_code)
         if document_type:
             queryset = queryset.filter(document__document_type=document_type)
+        if is_reference is not None:
+            queryset = queryset.filter(document__is_reference=is_reference.lower() in {"true", "1", "yes"})
+        if library_standard_id:
+            queryset = queryset.filter(document__library_standard_id=library_standard_id)
+        if library_company_id:
+            queryset = queryset.filter(document__library_company_id=library_company_id)
+        if library_project_id:
+            queryset = queryset.filter(document__library_project_id=library_project_id)
+        if library_kind:
+            queryset = queryset.filter(document__library_kind=library_kind)
+        if library_usage:
+            matching_ids = [
+                chunk.id
+                for chunk in queryset
+                if _library_usage_allowed(chunk.document, library_usage)
+            ]
+            queryset = DocumentChunk.objects.filter(id__in=matching_ids)
+        if process_area:
+            queryset = queryset.filter(document__process_area__iexact=process_area)
 
         return queryset.order_by("document_id", "chunk_index", "id")
 
@@ -170,3 +222,8 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
                 "results": serializer.data,
             }
         )
+
+
+def _library_usage_allowed(document: Document, usage: str) -> bool:
+    usages = document.library_usages or []
+    return not usages or usage in usages or "GENERAL" in usages

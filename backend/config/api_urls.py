@@ -12,6 +12,7 @@ from apps.documents.views import DocumentChunkViewSet, DocumentViewSet
 from apps.implementation.views import (
     ImplementationChecklistItemViewSet,
     ProjectViewSet,
+    WorkLogEvidenceViewSet,
     WorkLogEntryViewSet,
 )
 from apps.reviews.views import DocumentReviewViewSet, FindingViewSet, RequirementEvaluationViewSet
@@ -22,6 +23,7 @@ router.register("users", UserViewSet, basename="user")
 router.register("companies", CompanyViewSet, basename="company")
 router.register("projects", ProjectViewSet, basename="project")
 router.register("worklogs", WorkLogEntryViewSet, basename="worklog")
+router.register("worklog-evidences", WorkLogEvidenceViewSet, basename="worklog-evidence")
 router.register("standards", StandardViewSet, basename="standard")
 router.register("requirements", StandardRequirementViewSet, basename="requirement")
 router.register("checklist-items", ImplementationChecklistItemViewSet, basename="checklist-item")

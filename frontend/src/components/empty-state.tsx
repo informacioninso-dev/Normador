@@ -6,7 +6,7 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-black/10 bg-sand/70 px-5 py-8 text-center">
+    <div className="ui-muted rounded-[24px] border-dashed px-5 py-8 text-center">
       <h3
         className="text-lg font-bold text-ink"
         style={{ fontFamily: "var(--font-display)" }}

@@ -20,8 +20,9 @@ Reglas:
 8. Indica si el requisito puede cerrarse.
 9. Si no puede cerrarse, explica que documento o evidencia falta.
 10. Sugiere texto concreto para corregir el documento cuando aplique.
-11. Usa lenguaje formal, tecnico y auditable.
-12. Responde unicamente en JSON valido.
+11. Usa el item operativo del checklist para evaluar tareas, responsables, criterios y evidencia de campo.
+12. Usa lenguaje formal, tecnico y auditable.
+13. Responde unicamente en JSON valido.
 """.strip()
 
 REVIEW_OUTPUT_SCHEMA = {
@@ -181,6 +182,27 @@ def build_document_review_prompt(
 
     requirement_payload = []
     for requirement in requirements:
+        checklist_item = None
+        if document.project_id:
+            checklist_item = (
+                document.project.checklist_items.filter(requirement_id=requirement.id)
+                .order_by("id")
+                .first()
+            )
+        checklist_payload = None
+        if checklist_item:
+            checklist_payload = {
+                "id": checklist_item.id,
+                "title": checklist_item.title,
+                "item_type": checklist_item.item_type,
+                "implementation_task": checklist_item.implementation_task,
+                "acceptance_criteria": checklist_item.acceptance_criteria,
+                "review_questions": checklist_item.review_questions,
+                "requires_document": checklist_item.requires_document,
+                "requires_evidence": checklist_item.requires_evidence,
+                "ai_review_focus": checklist_item.ai_review_focus,
+                "current_status": checklist_item.status,
+            }
         requirement_payload.append(
             {
                 "id": requirement.id,
@@ -195,17 +217,25 @@ def build_document_review_prompt(
                 "requires_real_evidence": requirement.requires_real_evidence,
                 "required_document_type": requirement.required_document_type,
                 "required_evidence_type": requirement.required_evidence_type,
+                "operational_checklist_item": checklist_payload,
             }
         )
 
     # Separate project-doc chunks from reference-library chunks for the prompt
     project_context = {}
     reference_context = {}
+    operational_context = {}
     for req_key, req_data in retrieved_context.items():
         project_context[req_key] = {
             "requirement_id": req_data["requirement_id"],
             "chunks": req_data.get("chunks", []),
         }
+        context_chunks = req_data.get("project_context_chunks", [])
+        if context_chunks:
+            operational_context[req_key] = {
+                "requirement_id": req_data["requirement_id"],
+                "project_context_chunks": context_chunks,
+            }
         ref_chunks = req_data.get("reference_chunks", [])
         if ref_chunks:
             reference_context[req_key] = {
@@ -227,6 +257,11 @@ def build_document_review_prompt(
         prompt_parts += [
             "Documentos de referencia de la biblioteca (implementaciones previas y mejores practicas):",
             json.dumps(reference_context, ensure_ascii=False, indent=2),
+        ]
+    if operational_context:
+        prompt_parts += [
+            "Contexto operativo adicional del proyecto o empresa:",
+            json.dumps(operational_context, ensure_ascii=False, indent=2),
         ]
     prompt_parts += [
         "Esquema JSON esperado:",

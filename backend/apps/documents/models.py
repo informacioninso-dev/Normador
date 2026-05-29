@@ -10,6 +10,8 @@ from apps.common.choices import (
     DocumentProcessingStatus,
     DocumentType,
     EmbeddingStatus,
+    LibraryDocumentKind,
+    LibraryUsage,
 )
 from apps.common.models import TimeStampedModel
 
@@ -35,6 +37,38 @@ class Document(TimeStampedModel):
         default=False,
         help_text="True para documentos de la biblioteca de referencia global.",
     )
+    library_standard = models.ForeignKey(
+        "standards.Standard",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="library_documents",
+    )
+    library_company = models.ForeignKey(
+        "companies.Company",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="library_documents",
+    )
+    library_project = models.ForeignKey(
+        "implementation.Project",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="library_documents",
+    )
+    library_kind = models.CharField(
+        max_length=32,
+        choices=LibraryDocumentKind.choices,
+        default=LibraryDocumentKind.OTHER,
+    )
+    library_usages = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Usos permitidos: checklist, revision, RAG, plantilla o general.",
+    )
+    process_area = models.CharField(max_length=120, blank=True)
     requirement = models.ForeignKey(
         "standards.StandardRequirement",
         null=True,

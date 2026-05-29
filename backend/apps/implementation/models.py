@@ -1,11 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.common.choices import (
+    ChecklistItemType,
     ChecklistStatus,
     DocumentType,
     EvidenceType,
@@ -63,6 +66,17 @@ class ImplementationChecklistItem(TimeStampedModel):
     )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    item_type = models.CharField(
+        max_length=24,
+        choices=ChecklistItemType.choices,
+        default=ChecklistItemType.CONTROL,
+    )
+    implementation_task = models.TextField(blank=True)
+    acceptance_criteria = models.JSONField(default=list, blank=True)
+    review_questions = models.JSONField(default=list, blank=True)
+    requires_document = models.BooleanField(default=True)
+    requires_evidence = models.BooleanField(default=True)
+    ai_review_focus = models.TextField(blank=True)
     status = models.CharField(
         max_length=32,
         choices=ChecklistStatus.choices,
@@ -178,3 +192,48 @@ class WorkLogEntry(TimeStampedModel):
                 if self.billable_hours == Decimal("0.00"):
                     self.billable_hours = hours
         super().save(*args, **kwargs)
+
+
+def worklog_evidence_upload_to(instance, filename: str) -> str:
+    original = Path(filename)
+    extension = original.suffix.lower()
+    base_name = slugify(original.stem) or "worklog-evidence"
+    period = timezone.now().strftime("%Y/%m")
+    project_segment = f"project_{instance.worklog.project_id or 'unassigned'}"
+    return f"worklogs/{project_segment}/{period}/{base_name}{extension}"
+
+
+class WorkLogEvidence(TimeStampedModel):
+    worklog = models.ForeignKey(
+        WorkLogEntry,
+        on_delete=models.CASCADE,
+        related_name="evidences",
+    )
+    title = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
+    file = models.FileField(upload_to=worklog_evidence_upload_to, max_length=500)
+    file_name = models.CharField(max_length=255, blank=True)
+    file_extension = models.CharField(max_length=16, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_worklog_evidences",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.file_name:
+            self.file_name = Path(self.file.name).name
+        if self.file and not self.file_extension:
+            self.file_extension = Path(self.file.name).suffix.lower()
+        if not self.title and self.file_name:
+            self.title = Path(self.file_name).stem
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title or self.file_name

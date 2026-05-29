@@ -22,6 +22,7 @@ from apps.common.choices import (
     EmbeddingStatus,
     FindingStatus,
     FindingType,
+    LibraryUsage,
     RequirementEvaluationStatus,
     RiskLevel,
 )
@@ -290,6 +291,7 @@ def run_document_review(
 
     retrieved_context = _build_retrieved_context(
         document,
+        standard,
         requirements,
         retrieval_provider=retrieval_provider,
     )
@@ -476,7 +478,7 @@ def _resolve_requirements(document, standard, requirement_ids):
     return list(queryset)
 
 
-def _build_retrieved_context(document, requirements, retrieval_provider=None):
+def _build_retrieved_context(document, standard, requirements, retrieval_provider=None):
     context = {}
     library_limit = max(2, (settings.REVIEW_CONTEXT_TOP_K or 5) // 2)
 
@@ -499,9 +501,24 @@ def _build_retrieved_context(document, requirements, retrieval_provider=None):
         lib_results = search_chunks(
             query,
             provider=retrieval_provider,
+            project_id=document.project_id,
+            standard_id=standard.id,
             library_only=True,
+            library_usage=LibraryUsage.REVIEW_CONTEXT,
+            process_area=requirement.process_area,
             limit=library_limit,
         )
+        project_results = [
+            result
+            for result in search_chunks(
+                query,
+                provider=retrieval_provider,
+                project_id=document.project_id,
+                standard_id=standard.id,
+                limit=library_limit + 3,
+            )
+            if result.chunk.document_id != document.id
+        ][:library_limit]
         context[str(requirement.id)] = {
             "requirement_id": requirement.id,
             "chunks": [
@@ -521,6 +538,16 @@ def _build_retrieved_context(document, requirements, retrieval_provider=None):
                     "content": result.chunk.content,
                 }
                 for result in lib_results
+            ],
+            "project_context_chunks": [
+                {
+                    "chunk_id": result.chunk.id,
+                    "document_title": result.chunk.document.title,
+                    "document_type": result.chunk.document.document_type,
+                    "score": round(result.score, 6),
+                    "content": result.chunk.content,
+                }
+                for result in project_results
             ],
         }
     return context

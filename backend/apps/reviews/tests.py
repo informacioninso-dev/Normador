@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth import get_user_model
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -34,6 +35,12 @@ from apps.standards.models import Standard, StandardRequirement
 class DocumentReviewApiTests(APITestCase):
     def setUp(self):
         super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username="reviewer",
+            password="testpass",
+            is_staff=True,
+        )
+        self.client.force_authenticate(self.user)
         temp_root = Path(settings.BASE_DIR) / "test-media"
         temp_root.mkdir(parents=True, exist_ok=True)
         self.temp_media = temp_root / f"media-{uuid4().hex}"

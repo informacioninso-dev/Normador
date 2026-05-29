@@ -14,6 +14,7 @@ import type {
   QueryValue,
   Standard,
   StandardRequirement,
+  WorkLogEvidenceRecord,
   WorkLogEntry,
 } from "./types";
 import { getAuthHeaders } from "./auth";
@@ -275,12 +276,25 @@ export async function getCurrentUser(): Promise<{ username: string; is_staff: bo
 }
 
 export async function getLibraryData() {
-  const documents = await safeApiGet<DocumentRecord[]>("/api/documents/", [], {
-    is_reference: "true",
-  });
+  const [documents, standards, companies, projects] = await Promise.all([
+    safeApiGet<DocumentRecord[]>("/api/documents/", [], {
+      is_reference: "true",
+    }),
+    safeApiGet<Standard[]>("/api/standards/", []),
+    safeApiGet<Company[]>("/api/companies/", []),
+    safeApiGet<Project[]>("/api/projects/", []),
+  ]);
   return {
     documents: documents.data,
-    errors: [documents.error].filter(Boolean) as string[],
+    standards: standards.data,
+    companies: companies.data,
+    projects: projects.data,
+    errors: [
+      documents.error,
+      standards.error,
+      companies.error,
+      projects.error,
+    ].filter(Boolean) as string[],
   };
 }
 
@@ -301,6 +315,7 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
       implementationActivities: [],
       evidences: [],
       worklogs: [],
+      worklogEvidences: [],
       errors: [
         projectResponse.error ?? "No se encontro el proyecto solicitado.",
       ],
@@ -318,6 +333,7 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     implementationActivities,
     evidences,
     worklogs,
+    worklogEvidences,
   ] = await Promise.all([
     safeApiGet<Standard | null>(`/api/standards/${project.standard}/`, null),
     safeApiGet<StandardRequirement[]>("/api/requirements/", [], {
@@ -347,6 +363,9 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     safeApiGet<WorkLogEntry[]>("/api/worklogs/", [], {
       project: projectId,
     }),
+    safeApiGet<WorkLogEvidenceRecord[]>("/api/worklog-evidences/", [], {
+      project: projectId,
+    }),
   ]);
 
   return {
@@ -361,6 +380,7 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     implementationActivities: implementationActivities.data,
     evidences: evidences.data,
     worklogs: worklogs.data,
+    worklogEvidences: worklogEvidences.data,
     errors: [
       projectResponse.error,
       standard.error,
@@ -373,6 +393,7 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
       implementationActivities.error,
       evidences.error,
       worklogs.error,
+      worklogEvidences.error,
     ].filter(Boolean) as string[],
   };
 }

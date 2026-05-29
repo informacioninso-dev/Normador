@@ -68,6 +68,13 @@ export interface ChecklistItem {
   criticality: string;
   title: string;
   description: string;
+  item_type: string;
+  implementation_task: string;
+  acceptance_criteria: string[];
+  review_questions: string[];
+  requires_document: boolean;
+  requires_evidence: boolean;
+  ai_review_focus: string;
   status: string;
   progress_percentage: number;
   required_document_type: string;
@@ -86,6 +93,15 @@ export interface DocumentRecord {
   project: number | null;
   project_name: string;
   is_reference: boolean;
+  library_standard: number | null;
+  library_standard_name: string;
+  library_company: number | null;
+  library_company_name: string;
+  library_project: number | null;
+  library_project_name: string;
+  library_kind: string;
+  library_usages: string[];
+  process_area: string;
   requirement: number | null;
   requirement_title: string;
   checklist_item: number | null;
@@ -275,6 +291,25 @@ export interface WorkLogEntry {
   approved_by_username: string;
   approved_at: string | null;
   created_by: number | null;
+  evidence_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkLogEvidenceRecord {
+  id: number;
+  worklog: number;
+  worklog_title: string;
+  project: number;
+  project_name: string;
+  title: string;
+  notes: string;
+  file: string;
+  file_name: string;
+  file_extension: string;
+  uploaded_by: number | null;
+  uploaded_by_username: string;
+  uploaded_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -317,5 +352,6 @@ export interface ProjectWorkspace {
   implementationActivities: ImplementationActivity[];
   evidences: EvidenceRecord[];
   worklogs: WorkLogEntry[];
+  worklogEvidences: WorkLogEvidenceRecord[];
   errors: string[];
 }

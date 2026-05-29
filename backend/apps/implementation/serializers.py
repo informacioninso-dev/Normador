@@ -1,4 +1,5 @@
 from decimal import Decimal
+from pathlib import Path
 
 from rest_framework import serializers
 
@@ -6,8 +7,22 @@ from apps.common.choices import WorklogStatus
 from apps.implementation.models import (
     ImplementationChecklistItem,
     Project,
+    WorkLogEvidence,
     WorkLogEntry,
 )
+
+SUPPORTED_WORKLOG_EVIDENCE_EXTENSIONS = {
+    ".txt",
+    ".docx",
+    ".xlsx",
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".heic",
+    ".heif",
+}
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -69,6 +84,13 @@ class ImplementationChecklistItemSerializer(serializers.ModelSerializer):
             "criticality",
             "title",
             "description",
+            "item_type",
+            "implementation_task",
+            "acceptance_criteria",
+            "review_questions",
+            "requires_document",
+            "requires_evidence",
+            "ai_review_focus",
             "status",
             "progress_percentage",
             "required_document_type",
@@ -101,6 +123,10 @@ class WorkLogEntrySerializer(serializers.ModelSerializer):
     consultant_username = serializers.CharField(source="consultant.username", read_only=True)
     action_plan_title = serializers.CharField(source="action_plan.title", read_only=True)
     approved_by_username = serializers.CharField(source="approved_by.username", read_only=True)
+    evidence_count = serializers.SerializerMethodField()
+
+    def get_evidence_count(self, obj):
+        return getattr(obj, "evidence_count", obj.evidences.count())
 
     class Meta:
         model = WorkLogEntry
@@ -128,6 +154,7 @@ class WorkLogEntrySerializer(serializers.ModelSerializer):
             "approved_by_username",
             "approved_at",
             "created_by",
+            "evidence_count",
             "created_at",
             "updated_at",
         ]
@@ -140,6 +167,7 @@ class WorkLogEntrySerializer(serializers.ModelSerializer):
             "approved_by_username",
             "approved_at",
             "created_by",
+            "evidence_count",
             "created_at",
             "updated_at",
         ]
@@ -166,8 +194,8 @@ class WorkLogEntryCreateSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             "work_date": {"required": False},
-            "logged_hours": {"required": False},
-            "billable_hours": {"required": False},
+            "logged_hours": {"required": False, "allow_null": True},
+            "billable_hours": {"required": False, "allow_null": True},
             "action_plan": {"required": False},
         }
 
@@ -220,6 +248,9 @@ class WorkLogEntryCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        if validated_data.get("logged_hours") is None:
+            validated_data["logged_hours"] = Decimal("0.00")
+
         if validated_data.get("billable_hours") in {None, Decimal("0.00")}:
             validated_data["billable_hours"] = validated_data.get(
                 "logged_hours",
@@ -250,6 +281,7 @@ class WorkLogApprovalSerializer(serializers.Serializer):
         max_digits=6,
         decimal_places=2,
         required=False,
+        allow_null=True,
         min_value=Decimal("0.00"),
     )
     review_notes = serializers.CharField(required=False, allow_blank=True)
@@ -261,3 +293,65 @@ class WorkLogApprovalSerializer(serializers.Serializer):
                 {"approved_hours": "approved_hours must be greater than zero."}
             )
         return attrs
+
+
+class WorkLogEvidenceSerializer(serializers.ModelSerializer):
+    worklog_title = serializers.CharField(source="worklog.title", read_only=True)
+    project = serializers.IntegerField(source="worklog.project_id", read_only=True)
+    project_name = serializers.CharField(source="worklog.project.name", read_only=True)
+    uploaded_by_username = serializers.CharField(source="uploaded_by.username", read_only=True)
+
+    class Meta:
+        model = WorkLogEvidence
+        fields = [
+            "id",
+            "worklog",
+            "worklog_title",
+            "project",
+            "project_name",
+            "title",
+            "notes",
+            "file",
+            "file_name",
+            "file_extension",
+            "uploaded_by",
+            "uploaded_by_username",
+            "uploaded_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "worklog_title",
+            "project",
+            "project_name",
+            "file_name",
+            "file_extension",
+            "uploaded_by",
+            "uploaded_by_username",
+            "uploaded_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class WorkLogEvidenceCreateSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = WorkLogEvidence
+        fields = [
+            "worklog",
+            "title",
+            "notes",
+            "file",
+        ]
+
+    def validate_file(self, upload):
+        suffix = Path(upload.name).suffix.lower()
+        if suffix not in SUPPORTED_WORKLOG_EVIDENCE_EXTENSIONS:
+            raise serializers.ValidationError(
+                "Tipo de archivo no soportado. Use: .txt, .docx, .xlsx, .pdf, .png, .jpg, .jpeg, .webp, .heic, .heif"
+            )
+        return upload

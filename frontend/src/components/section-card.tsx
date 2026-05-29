@@ -12,7 +12,7 @@ export function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-black/8 bg-white/84 p-5 shadow-[0_18px_50px_rgba(14,20,32,0.07)] backdrop-blur">
+    <section className="ui-surface rounded-[24px] p-4 backdrop-blur md:rounded-[28px] md:p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="max-w-3xl">
           <h2

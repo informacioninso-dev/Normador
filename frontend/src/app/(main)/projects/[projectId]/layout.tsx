@@ -30,7 +30,7 @@ export default async function ProjectLayout({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[28px] border border-black/8 bg-[linear-gradient(150deg,rgba(255,255,255,0.92),rgba(244,239,230,0.88))] px-5 pt-5 pb-0 shadow-[0_18px_50px_rgba(14,20,32,0.08)]">
+      <section className="ui-surface rounded-[28px] px-4 pt-4 pb-0 md:px-5 md:pt-5">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0 flex-1">
@@ -61,7 +61,7 @@ export default async function ProjectLayout({
               { label: "Implementación", value: `${summary.implementationProgress}%` },
               { label: "Meta", value: formatDate(workspace.project.target_date) },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-[18px] bg-white/80 px-4 py-3 text-center min-w-[90px]">
+              <div key={stat.label} className="ui-muted min-w-[90px] rounded-[18px] px-4 py-3 text-center">
                 <p className="text-xs uppercase tracking-[0.16em] text-ink/40">{stat.label}</p>
                 <p className="mt-1 text-sm font-bold text-ink">{stat.value}</p>
               </div>

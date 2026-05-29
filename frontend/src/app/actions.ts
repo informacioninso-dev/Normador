@@ -19,7 +19,11 @@ function numberValue(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function redirectWithMessage(returnPath: string, kind: "success" | "error", message: string) {
+function redirectWithMessage(
+  returnPath: string,
+  kind: "success" | "error",
+  message: string,
+): never {
   const [pathname, query = ""] = returnPath.split("?");
   const params = new URLSearchParams(query);
   params.delete("success");
@@ -52,22 +56,23 @@ export async function createCompanyAction(formData: FormData) {
 
 export async function createProjectAction(formData: FormData) {
   const returnPath = ensureReturnPath(formData);
+  const successReturnPath = textValue(formData, "success_return_path") || returnPath;
+  const selectedCompanyId = numberValue(formData, "company");
+  const companyName = textValue(formData, "company_name");
+  const companyRuc = textValue(formData, "company_ruc");
+
+  if (!selectedCompanyId && (!companyName || !companyRuc)) {
+    redirectWithMessage(
+      returnPath,
+      "error",
+      "Selecciona una empresa o crea una rapida con nombre y RUC.",
+    );
+  }
 
   try {
-    let companyId = numberValue(formData, "company");
+    let companyId = selectedCompanyId;
 
     if (!companyId) {
-      const companyName = textValue(formData, "company_name");
-      const companyRuc = textValue(formData, "company_ruc");
-
-      if (!companyName || !companyRuc) {
-        redirectWithMessage(
-          returnPath,
-          "error",
-          "Selecciona una empresa o crea una rapida con nombre y RUC.",
-        );
-      }
-
       const company = await apiJsonMutation<{ id: number }>("/api/companies/", "POST", {
         name: companyName,
         ruc: companyRuc,
@@ -91,7 +96,7 @@ export async function createProjectAction(formData: FormData) {
     redirectWithMessage(returnPath, "error", message);
   }
 
-  redirectWithMessage(returnPath, "success", "Proyecto creado y checklist generado.");
+  redirectWithMessage(successReturnPath, "success", "Proyecto creado y checklist generado.");
 }
 
 export async function uploadDocumentAction(formData: FormData) {
@@ -103,6 +108,7 @@ export async function uploadDocumentAction(formData: FormData) {
   const checklistItem = textValue(formData, "checklist_item");
   const title = textValue(formData, "title");
   const documentType = textValue(formData, "document_type");
+  const autoReview = textValue(formData, "auto_review") === "1";
   const file = formData.get("file");
 
   payload.set("project", project);
@@ -120,11 +126,47 @@ export async function uploadDocumentAction(formData: FormData) {
     payload.set("file", file);
   }
 
+  let document: { id: number; status: string } | null = null;
   try {
-    await apiFormMutation("/api/documents/", "POST", payload);
+    document = await apiFormMutation<{ id: number; status: string }>(
+      "/api/documents/",
+      "POST",
+      payload,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo cargar el documento.";
     redirectWithMessage(returnPath, "error", message);
+  }
+
+  if (!document) {
+    redirectWithMessage(returnPath, "error", "No se pudo cargar el documento.");
+  }
+
+  const uploadedDocument = document;
+
+  if (autoReview && requirement && uploadedDocument.status === "LISTO") {
+    let reviewExecuted = false;
+    try {
+      await apiJsonMutation("/api/document-reviews/", "POST", {
+        document: uploadedDocument.id,
+        review_type: "CUMPLIMIENTO_NORMATIVO",
+        requirements: [Number(requirement)],
+      });
+      reviewExecuted = true;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo ejecutar la revision AI.";
+      redirectWithMessage(
+        returnPath,
+        "error",
+        `Documento cargado, pero la revision AI fallo: ${message}`,
+      );
+    }
+    if (reviewExecuted) {
+      redirectWithMessage(returnPath, "success", "Documento cargado y revision AI ejecutada.");
+    }
   }
 
   redirectWithMessage(returnPath, "success", "Documento cargado y procesado.");
@@ -132,12 +174,17 @@ export async function uploadDocumentAction(formData: FormData) {
 
 export async function runReviewAction(formData: FormData) {
   const returnPath = ensureReturnPath(formData);
+  const requirementId = numberValue(formData, "requirement");
+  const payload: Record<string, unknown> = {
+    document: numberValue(formData, "document"),
+    review_type: textValue(formData, "review_type"),
+  };
+  if (requirementId) {
+    payload.requirements = [requirementId];
+  }
 
   try {
-    await apiJsonMutation("/api/document-reviews/", "POST", {
-      document: numberValue(formData, "document"),
-      review_type: textValue(formData, "review_type"),
-    });
+    await apiJsonMutation("/api/document-reviews/", "POST", payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo ejecutar la revision.";
     redirectWithMessage(returnPath, "error", message);
@@ -221,19 +268,47 @@ export async function createWorklogAction(formData: FormData) {
   const returnPath = ensureReturnPath(formData);
 
   try {
-    await apiJsonMutation("/api/worklogs/", "POST", {
+    const payload: Record<string, unknown> = {
       project: numberValue(formData, "project"),
       action_plan: numberValue(formData, "action_plan"),
-      work_date: textValue(formData, "work_date") || null,
       activity_type: textValue(formData, "activity_type") || "IMPLEMENTACION",
       title: textValue(formData, "title"),
       summary: textValue(formData, "summary"),
       deliverables: textValue(formData, "deliverables"),
-      start_time: textValue(formData, "start_time") || null,
-      end_time: textValue(formData, "end_time") || null,
-      logged_hours: textValue(formData, "logged_hours") || null,
-      billable_hours: textValue(formData, "billable_hours") || null,
-    });
+    };
+
+    for (const field of [
+      "work_date",
+      "start_time",
+      "end_time",
+      "logged_hours",
+      "billable_hours",
+    ]) {
+      const value = textValue(formData, field);
+      if (value) {
+        payload[field] = value;
+      }
+    }
+
+    const worklog = await apiJsonMutation<{ id: number }>("/api/worklogs/", "POST", payload);
+    const supportPhoto = formData.get("support_photo");
+    const supportFile = formData.get("support_file");
+    const selectedSupport =
+      supportPhoto instanceof File && supportPhoto.size > 0 ? supportPhoto : supportFile;
+    if (selectedSupport instanceof File && selectedSupport.size > 0) {
+      const supportPayload = new FormData();
+      supportPayload.set("worklog", String(worklog.id));
+      supportPayload.set("file", selectedSupport);
+      const supportTitle = textValue(formData, "support_title");
+      const supportNotes = textValue(formData, "support_notes");
+      if (supportTitle) {
+        supportPayload.set("title", supportTitle);
+      }
+      if (supportNotes) {
+        supportPayload.set("notes", supportNotes);
+      }
+      await apiFormMutation("/api/worklog-evidences/", "POST", supportPayload);
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo registrar la jornada.";
@@ -241,6 +316,64 @@ export async function createWorklogAction(formData: FormData) {
   }
 
   redirectWithMessage(returnPath, "success", "Jornada registrada.");
+}
+
+export async function createWorklogEvidenceAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+  const payload = new FormData();
+
+  for (const field of ["worklog", "title", "notes"]) {
+    const value = textValue(formData, field);
+    if (value) {
+      payload.set(field, value);
+    }
+  }
+
+  const photo = formData.get("photo");
+  const file = formData.get("file");
+  const selectedFile = photo instanceof File && photo.size > 0 ? photo : file;
+  if (selectedFile instanceof File && selectedFile.size > 0) {
+    payload.set("file", selectedFile);
+  }
+
+  try {
+    await apiFormMutation("/api/worklog-evidences/", "POST", payload);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo subir el soporte.";
+    redirectWithMessage(returnPath, "error", message);
+  }
+
+  redirectWithMessage(returnPath, "success", "Soporte agregado a la jornada.");
+}
+
+export async function regenerateChecklistFromLibraryAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+  const projectId = numberValue(formData, "project_id");
+
+  if (!projectId) {
+    redirectWithMessage(returnPath, "error", "Falta el proyecto para actualizar el checklist.");
+  }
+
+  try {
+    const result = await apiJsonMutation<{
+      created_items: number;
+      created_requirements: number;
+      reference_documents: number;
+      extracted_clauses: number;
+    }>(`/api/projects/${projectId}/regenerate_checklist/`, "POST", {
+      use_library: true,
+    });
+    redirectWithMessage(
+      returnPath,
+      "success",
+      `Checklist actualizado: ${result.created_requirements} requisitos nuevos, ${result.created_items} items nuevos.`,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo actualizar el checklist.";
+    redirectWithMessage(returnPath, "error", message);
+  }
 }
 
 export async function reviewWorklogAction(formData: FormData) {
@@ -253,10 +386,15 @@ export async function reviewWorklogAction(formData: FormData) {
   }
 
   try {
-    await apiJsonMutation(`/api/worklogs/${worklogId}/${transition}/`, "POST", {
-      approved_hours: textValue(formData, "approved_hours") || null,
+    const payload: Record<string, unknown> = {
       review_notes: textValue(formData, "review_notes"),
-    });
+    };
+    const approvedHours = textValue(formData, "approved_hours");
+    if (transition === "approve" && approvedHours) {
+      payload.approved_hours = approvedHours;
+    }
+
+    await apiJsonMutation(`/api/worklogs/${worklogId}/${transition}/`, "POST", payload);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo revisar la jornada.";

@@ -43,6 +43,14 @@ class ChecklistStatus(models.TextChoices):
     CLOSED = "CERRADO", "Cerrado"
 
 
+class ChecklistItemType(models.TextChoices):
+    DOCUMENT = "DOCUMENTO", "Documento"
+    EVIDENCE = "EVIDENCIA", "Evidencia"
+    ACTIVITY = "ACTIVIDAD", "Actividad"
+    CONTROL = "CONTROL", "Control"
+    DECISION = "DECISION", "Decision"
+
+
 class ReviewType(models.TextChoices):
     DOCUMENT_REVIEW = "REVISION_DOCUMENTAL", "Revision documental"
     REGULATORY_COMPLIANCE = "CUMPLIMIENTO_NORMATIVO", "Cumplimiento normativo"
@@ -69,6 +77,24 @@ class DocumentProcessingStatus(models.TextChoices):
     READY = "LISTO", "Listo"
     FAILED = "FALLIDO", "Fallido"
     ARCHIVED = "ARCHIVADO", "Archivado"
+
+
+class LibraryDocumentKind(models.TextChoices):
+    STANDARD_SOURCE = "NORMA", "Norma"
+    ANNEX = "ANEXO", "Anexo"
+    GUIDE = "GUIA", "Guia"
+    TEMPLATE = "PLANTILLA", "Plantilla"
+    EXAMPLE = "EJEMPLO", "Ejemplo"
+    COMPANY_CONTEXT = "CONTEXTO_EMPRESA", "Contexto empresa"
+    OTHER = "OTRO", "Otro"
+
+
+class LibraryUsage(models.TextChoices):
+    CHECKLIST = "GENERAR_CHECKLIST", "Generar checklist"
+    REVIEW_CONTEXT = "REVISION_DOCUMENTOS", "Revision de documentos"
+    RAG_CONTEXT = "CONTEXTO_RAG", "Contexto RAG"
+    TEMPLATE = "PLANTILLA", "Plantilla"
+    GENERAL = "GENERAL", "General"
 
 
 class EvidenceType(models.TextChoices):
