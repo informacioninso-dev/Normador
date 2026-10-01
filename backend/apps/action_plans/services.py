@@ -3,6 +3,7 @@ from django.utils import timezone
 from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 from apps.common.choices import (
     ActionPlanStatus,
+    DocumentProcessingStatus,
     EvidenceValidationStatus,
     FindingStatus,
     ImplementationActivityType,
@@ -240,6 +241,7 @@ def _validate_action_plan_can_close(action_plan: ActionPlan) -> None:
             document_review__project_id=action_plan.project_id,
             requirement_id=action_plan.requirement_id,
         )
+        .exclude(document_review__document__status=DocumentProcessingStatus.ARCHIVED)
         .order_by("-document_review__created_at", "-document_review_id", "-id")
         .first()
     )

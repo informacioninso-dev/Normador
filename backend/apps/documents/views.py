@@ -14,6 +14,7 @@ from apps.documents.serializers import (
     DocumentWriteSerializer,
 )
 from apps.documents.services import index_document_chunks, process_document
+from apps.common.choices import DocumentProcessingStatus
 
 
 class DocumentViewSet(viewsets.ModelViewSet):
@@ -100,9 +101,25 @@ class DocumentViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(read_serializer.data)
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def update(self, request, *args, **kwargs):
+        document = self.get_object()
+        if hasattr(document, "control_revision"):
+            return Response({"detail": "Crea una nueva version desde Control documental."}, status=400)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        document = self.get_object()
+        if hasattr(document, "control_revision"):
+            return Response({"detail": "Archiva el documento desde Control documental."}, status=400)
+        document.status = DocumentProcessingStatus.ARCHIVED
+        document.save(update_fields=["status", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=["post"])
     def reprocess(self, request, pk=None):
         document = self.get_object()
+        if document.status == DocumentProcessingStatus.ARCHIVED:
+            return Response({"detail": "Un documento archivado no puede reprocesarse."}, status=400)
         process_document(document)
         serializer = DocumentSerializer(document, context=self.get_serializer_context())
         return Response(serializer.data)

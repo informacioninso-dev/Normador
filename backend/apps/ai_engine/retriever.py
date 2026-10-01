@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db.models import Q
 
 from apps.ai_engine.embeddings import EmbeddingProvider, get_default_embedding_provider
-from apps.common.choices import EmbeddingStatus
+from apps.common.choices import DocumentProcessingStatus, EmbeddingStatus
 from apps.documents.models import DocumentChunk
 
 
@@ -58,7 +58,9 @@ def search_chunks(
         "document__library_project",
         "document__requirement",
         "document__checklist_item",
-    ).filter(embedding_status=EmbeddingStatus.READY)
+    ).filter(embedding_status=EmbeddingStatus.READY).exclude(
+        document__status=DocumentProcessingStatus.ARCHIVED
+    )
 
     if library_only:
         queryset = queryset.filter(document__is_reference=True)

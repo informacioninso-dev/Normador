@@ -9,6 +9,7 @@ from apps.action_plans.views import (
 )
 from apps.companies.views import CompanyViewSet
 from apps.documents.views import DocumentChunkViewSet, DocumentViewSet
+from apps.documents.control_views import ControlledDocumentViewSet
 from apps.implementation.views import (
     ImplementationChecklistItemViewSet,
     ProjectViewSet,
@@ -28,6 +29,7 @@ router.register("standards", StandardViewSet, basename="standard")
 router.register("requirements", StandardRequirementViewSet, basename="requirement")
 router.register("checklist-items", ImplementationChecklistItemViewSet, basename="checklist-item")
 router.register("documents", DocumentViewSet, basename="document")
+router.register("controlled-documents", ControlledDocumentViewSet, basename="controlled-document")
 router.register("document-chunks", DocumentChunkViewSet, basename="document-chunk")
 router.register("document-reviews", DocumentReviewViewSet, basename="document-review")
 router.register("requirement-evaluations", RequirementEvaluationViewSet, basename="requirement-evaluation")

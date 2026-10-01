@@ -79,6 +79,20 @@ class DocumentProcessingStatus(models.TextChoices):
     ARCHIVED = "ARCHIVADO", "Archivado"
 
 
+class ControlledDocumentKind(models.TextChoices):
+    PROCEDURE = "POE", "POE"
+    MATRIX = "MATRIZ", "Matriz"
+    FORM = "FORMATO", "Formato"
+
+
+class DocumentRevisionStatus(models.TextChoices):
+    DRAFT = "BORRADOR", "Borrador"
+    IN_REVIEW = "EN_REVISION", "En revision"
+    CURRENT = "VIGENTE", "Vigente"
+    OBSOLETE = "OBSOLETO", "Obsoleto"
+    ARCHIVED = "ARCHIVADO", "Archivado"
+
+
 class LibraryDocumentKind(models.TextChoices):
     STANDARD_SOURCE = "NORMA", "Norma"
     ANNEX = "ANEXO", "Anexo"

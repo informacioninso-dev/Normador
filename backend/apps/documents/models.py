@@ -7,7 +7,9 @@ from django.utils.text import slugify
 
 from apps.common.choices import (
     AIProvider,
+    ControlledDocumentKind,
     DocumentProcessingStatus,
+    DocumentRevisionStatus,
     DocumentType,
     EmbeddingStatus,
     LibraryDocumentKind,
@@ -23,6 +25,12 @@ def document_upload_to(instance, filename: str) -> str:
     period = timezone.now().strftime("%Y/%m")
     project_segment = f"project_{instance.project_id or 'unassigned'}"
     return f"documents/{project_segment}/{period}/{base_name}{extension}"
+
+
+def revision_release_upload_to(instance, filename: str) -> str:
+    original = Path(filename)
+    base_name = slugify(original.stem) or "document"
+    return f"documents/releases/{instance.controlled_document_id}/{base_name}{original.suffix.lower()}"
 
 
 class Document(TimeStampedModel):
@@ -165,3 +173,92 @@ class DocumentChunk(TimeStampedModel):
 
     def __str__(self):
         return f"{self.document_id}:{self.chunk_index}"
+
+
+class ControlledDocument(TimeStampedModel):
+    project = models.ForeignKey(
+        "implementation.Project", on_delete=models.PROTECT, related_name="controlled_documents"
+    )
+    requirement = models.ForeignKey(
+        "standards.StandardRequirement", on_delete=models.PROTECT,
+        related_name="controlled_documents", null=True, blank=True,
+    )
+    checklist_item = models.ForeignKey(
+        "implementation.ImplementationChecklistItem", on_delete=models.PROTECT,
+        related_name="controlled_documents", null=True, blank=True,
+    )
+    code = models.CharField(max_length=64)
+    title = models.CharField(max_length=255)
+    kind = models.CharField(max_length=16, choices=ControlledDocumentKind.choices)
+    process_area = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="created_controlled_documents",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["code", "id"]
+        constraints = [models.UniqueConstraint(
+            fields=["project", "code"], name="unique_controlled_document_code_per_project"
+        )]
+
+    def __str__(self):
+        return f"{self.code} - {self.title}"
+
+
+class DocumentRevision(TimeStampedModel):
+    controlled_document = models.ForeignKey(
+        ControlledDocument, on_delete=models.PROTECT, related_name="revisions"
+    )
+    document = models.OneToOneField(
+        Document, on_delete=models.PROTECT, related_name="control_revision"
+    )
+    number = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=16, choices=DocumentRevisionStatus.choices,
+        default=DocumentRevisionStatus.DRAFT,
+    )
+    content = models.JSONField(default=dict, blank=True)
+    source = models.CharField(max_length=16, default="PLANTILLA")
+    content_hash = models.CharField(max_length=64)
+    change_summary = models.TextField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="created_document_revisions",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="approved_document_revisions",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    effective_date = models.DateField(null=True, blank=True)
+    approval_notes = models.TextField(blank=True)
+    released_file = models.FileField(upload_to=revision_release_upload_to, max_length=500, blank=True)
+    released_hash = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ["-number", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["controlled_document", "number"], name="unique_controlled_document_revision"
+            ),
+            models.UniqueConstraint(
+                fields=["controlled_document"], condition=models.Q(status="VIGENTE"),
+                name="unique_current_controlled_document_revision",
+            ),
+        ]
+
+
+class DocumentControlEvent(models.Model):
+    controlled_document = models.ForeignKey(
+        ControlledDocument, on_delete=models.PROTECT, related_name="control_events"
+    )
+    revision = models.ForeignKey(DocumentRevision, on_delete=models.PROTECT, related_name="control_events")
+    action = models.CharField(max_length=32)
+    notes = models.TextField(blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

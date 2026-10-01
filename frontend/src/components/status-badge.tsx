@@ -1,4 +1,8 @@
 const statusStyles: Record<string, string> = {
+  BORRADOR: "bg-stone-100 text-stone-700",
+  VIGENTE: "bg-emerald-100 text-emerald-800",
+  OBSOLETO: "bg-amber-100 text-amber-800",
+  ARCHIVADO: "bg-stone-200 text-stone-700",
   PLANNING: "bg-slate-100 text-slate-700",
   ACTIVE: "bg-sky-100 text-sky-800",
   ON_HOLD: "bg-amber-100 text-amber-800",
@@ -34,6 +38,10 @@ const statusStyles: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  BORRADOR: "Borrador",
+  VIGENTE: "Vigente",
+  OBSOLETO: "Obsoleto",
+  ARCHIVADO: "Archivado",
   PLANNING: "Planificacion",
   ACTIVE: "Activo",
   ON_HOLD: "En pausa",

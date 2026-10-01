@@ -307,6 +307,7 @@ def recalculate_checklist_item_state(
             document_review__project_id=checklist_item.project_id,
             requirement_id=checklist_item.requirement_id,
         )
+        .exclude(document_review__document__status=DocumentProcessingStatus.ARCHIVED)
         .select_related("document_review")
         .order_by("-document_review__created_at", "-document_review_id", "-id")
         .first()

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const projectTabs = [
   { href: "", label: "Implementacion" },
+  { href: "/document-control", label: "Control documental" },
   { href: "/daily-log", label: "Registro diario" },
 ];
 
@@ -15,7 +16,7 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {projectTabs.map((tab) => {
         const href = `/projects/${projectId}${tab.href}`;
-        const active = pathname === href;
+        const active = pathname === href || (tab.href !== "" && pathname.startsWith(`${href}/`));
 
         return (
           <Link

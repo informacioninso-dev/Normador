@@ -1,5 +1,55 @@
 export type QueryValue = string | number | boolean | null | undefined;
 
+export interface ControlledDocumentContent {
+  sections?: Array<{ title: string; text: string }>;
+  columns?: string[];
+  rows?: string[][];
+}
+
+export interface DocumentRevision {
+  id: number;
+  document: number;
+  number: number;
+  status: string;
+  content: ControlledDocumentContent;
+  source: "PLANTILLA" | "ARCHIVO";
+  content_hash: string;
+  released_hash: string;
+  change_summary: string;
+  created_by_username?: string;
+  approved_by_username?: string;
+  approved_at: string | null;
+  effective_date: string | null;
+  approval_notes: string;
+  created_at: string;
+  extracted_text: string;
+}
+
+export interface ControlledDocument {
+  id: number;
+  project: number;
+  code: string;
+  title: string;
+  kind: "POE" | "MATRIZ" | "FORMATO";
+  process_area: string;
+  requirement: number | null;
+  requirement_title?: string;
+  clause?: string;
+  archived_at: string | null;
+  created_at: string;
+  latest_revision: DocumentRevision | null;
+  current_revision: DocumentRevision | null;
+  revisions: DocumentRevision[];
+  events: Array<{
+    id: number;
+    action: string;
+    notes: string;
+    username?: string;
+    revision_number: number;
+    created_at: string;
+  }>;
+}
+
 export interface Company {
   id: number;
   name: string;
