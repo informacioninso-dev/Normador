@@ -47,7 +47,7 @@ function progressFor(items: ChecklistItem[]) {
 function ChecklistCard({ item }: { item: ChecklistItem }) {
   return (
     <Link
-      href={`/projects/${item.project}/checklist`}
+      href={`/projects/${item.project}/checklist?item=${item.id}#requirement-${item.id}`}
       className="ui-card block rounded-[14px] p-3 transition hover:bg-[#f7faff]"
     >
       <div className="flex items-start justify-between gap-3">
@@ -55,7 +55,7 @@ function ChecklistCard({ item }: { item: ChecklistItem }) {
           <p className="truncate text-sm font-semibold text-ink">
             {item.clause} - {item.title}
           </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink/45">
+          <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink/70">
             {item.process_area}
           </p>
         </div>
@@ -108,13 +108,13 @@ function StatusBoard({ items }: { items: ChecklistItem[] }) {
           <section key={status} className="ui-panel rounded-[18px] p-4">
             <div className="flex items-center justify-between gap-3">
               <StatusBadge value={status} />
-              <span className="text-sm font-semibold text-ink/60">{statusItems.length}</span>
+              <span className="text-sm font-semibold text-ink/70">{statusItems.length}</span>
             </div>
             <div className="mt-4 space-y-3">
               {statusItems.length ? (
                 statusItems.map((item) => <ChecklistCard key={item.id} item={item} />)
               ) : (
-                <div className="ui-muted rounded-[14px] border-dashed p-4 text-sm text-ink/60">
+                <div className="ui-muted rounded-[14px] border-dashed p-4 text-sm text-ink/70">
                   Sin items.
                 </div>
               )}
@@ -213,7 +213,7 @@ export default async function ProjectOverviewPage({
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map((item) => (
           <div key={item.label} className="ui-card rounded-[18px] px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{item.label}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{item.label}</p>
             <p className="mt-2 text-2xl font-bold text-ink">{item.value}</p>
           </div>
         ))}
@@ -226,7 +226,7 @@ export default async function ProjectOverviewPage({
             href={item.href}
             className="ui-muted rounded-[18px] px-4 py-3 transition hover:bg-[#edf3ff]"
           >
-            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{item.label}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{item.label}</p>
             <p className="mt-1 text-xl font-bold text-ink">{item.value}</p>
           </Link>
         ))}

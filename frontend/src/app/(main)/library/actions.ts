@@ -11,15 +11,14 @@ function textValue(formData: FormData, key: string) {
 
 function redirectWithFlash(kind: "success" | "error", message: string) {
   const params = new URLSearchParams();
-  params.set(kind, encodeURIComponent(message));
+  params.set(kind, message);
   redirect(`/library?${params.toString()}`);
 }
 
 export async function uploadReferenceDocumentAction(formData: FormData) {
   const file = formData.get("file");
   if (!file || typeof file === "string") {
-    redirectWithFlash("error", "Debes seleccionar un archivo.");
-    return;
+    return { error: "Debes seleccionar un archivo.", fieldErrors: { file: "Selecciona un archivo." } };
   }
 
   const payload = new FormData();
@@ -55,8 +54,7 @@ export async function uploadReferenceDocumentAction(formData: FormData) {
     await apiFormMutation("/api/documents/", "POST", payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error al subir el documento.";
-    redirectWithFlash("error", message);
-    return;
+    return { error: message };
   }
 
   redirectWithFlash("success", "Documento agregado a la biblioteca.");
@@ -65,8 +63,7 @@ export async function uploadReferenceDocumentAction(formData: FormData) {
 export async function deleteReferenceDocumentAction(formData: FormData) {
   const id = textValue(formData, "document_id");
   if (!id) {
-    redirectWithFlash("error", "ID de documento no especificado.");
-    return;
+    return { error: "ID de documento no especificado." };
   }
 
   try {
@@ -83,9 +80,8 @@ export async function deleteReferenceDocumentAction(formData: FormData) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error al eliminar el documento.";
-    redirectWithFlash("error", message);
-    return;
+    return { error: message };
   }
 
-  redirectWithFlash("success", "Documento eliminado de la biblioteca.");
+  redirectWithFlash("success", "Documento archivado; el archivo y su historial se conservan.");
 }

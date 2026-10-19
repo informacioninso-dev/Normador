@@ -313,6 +313,7 @@ export function DailyLogAiAssistant({ projectId }: { projectId: number }) {
             </div>
 
             <textarea
+              aria-label="Describe la actividad que NORMAN debe ayudarte a registrar"
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
               className="mt-4 min-h-[150px]"
@@ -326,6 +327,7 @@ export function DailyLogAiAssistant({ projectId }: { projectId: number }) {
               <div className="mt-3 grid gap-2">
                 <input
                   value={supportTitle}
+                  aria-label="Título del soporte opcional"
                   onChange={(event) => setSupportTitle(event.target.value)}
                   placeholder="Titulo del soporte"
                 />

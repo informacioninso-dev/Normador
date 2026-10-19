@@ -1,3 +1,4 @@
+from apps.companies.api_access import CompanyRelationsMixin, PrivateFileMixin
 from pathlib import Path
 
 from rest_framework import serializers
@@ -96,7 +97,7 @@ class ActionPlanSerializer(serializers.ModelSerializer):
         ]
 
 
-class ActionPlanCreateSerializer(serializers.ModelSerializer):
+class ActionPlanCreateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     title = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
     recommended_action = serializers.CharField(required=False, allow_blank=True)
@@ -179,7 +180,7 @@ class ActionPlanCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class ActionPlanUpdateSerializer(serializers.ModelSerializer):
+class ActionPlanUpdateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     class Meta:
         model = ActionPlan
         fields = [
@@ -242,7 +243,7 @@ class ImplementationActivitySerializer(serializers.ModelSerializer):
         ]
 
 
-class ImplementationActivityCreateSerializer(serializers.ModelSerializer):
+class ImplementationActivityCreateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     title = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
 
@@ -324,7 +325,7 @@ class ImplementationActivityCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class EvidenceSerializer(serializers.ModelSerializer):
+class EvidenceSerializer(PrivateFileMixin, serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name", read_only=True)
     action_plan_title = serializers.CharField(source="action_plan.title", read_only=True)
     requirement_title = serializers.CharField(source="requirement.title", read_only=True)
@@ -385,7 +386,7 @@ class EvidenceSerializer(serializers.ModelSerializer):
         ]
 
 
-class EvidenceCreateSerializer(serializers.ModelSerializer):
+class EvidenceCreateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     title = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
 
@@ -517,7 +518,12 @@ class EvidenceCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class EvidenceUpdateSerializer(serializers.ModelSerializer):
+class EvidenceUpdateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
+    def validate(self, attrs):
+        if self.instance.status == "VALIDADA":
+            raise serializers.ValidationError("La evidencia validada se conserva. Registra una nueva evidencia para corregirla.")
+        return attrs
+
     class Meta:
         model = Evidence
         fields = [

@@ -1,0 +1,110 @@
+# NORMAN — Trabajo operativo
+
+Especificación: SPEC.md. Decisiones y auditoría: ARCHITECTURE.md. Las fases anteriores quedan como historial; esta numeración sigue la solicitud actual.
+
+## Fase 0 — Auditoría y estabilización
+
+- [x] T-00 Inspeccionar estructura, dependencias, migraciones, servicios y frontend; preservar código y datos. Referencia DA-01/02.
+- [x] T-01 Crear cuatro documentos SDD vigentes y registrar brechas reales.
+- [x] T-02 Migrar dependencias a Poetry, lock y Python 3.12 en backend/.venv; instalación validada y requirements.txt retirado. Docker consume el lock; npm ci conserva el lock frontend.
+- [x] T-03 Django sin errores y sin diferencias de migración; 32 pruebas aprobadas; build Next.js aprobado; HTTP 200 en salud backend (8011) y login frontend (3001).
+- [x] T-04 Segunda revisión de reutilización: conservar servicios/apps, archivar guías en docs/legacy, retirar placeholders sin consumidores y artefacto tsbuildinfo; centralizar consulta de sesión. Ver inventario en ARCHITECTURE.md.
+
+Aceptación: instalación reproducible, backend y frontend arrancan; ningún dato empresarial eliminado; limitaciones explícitas.
+
+## Fase 1 — Autenticación, multicliente, roles y frontend base
+
+Depende de T-02/T-03. RF-01/02, RB-04/06.
+
+- [x] T-10 Login, renovación, credenciales inválidas, cuenta inactiva, /me, endpoints privados y administración: apps/accounts/tests.py (RF-01).
+- [x] T-11 Aislamiento inicial de proyectos/checklist y relación company al crear/editar: apps/implementation/tests_access.py (RF-02). Staff conserva acceso global; no equivale a completar aislamiento integral.
+- [x] T-12 CompanyMembership y cuatro roles, migración aditiva con propietarios conservados, administración de accesos desde Empresas.
+- [x] T-13 Aislamiento de API, relaciones, biblioteca, RAG y descargas. Regresiones en apps/companies/tests.py incluyen listas/detalles, mutaciones cruzadas y permisos por rol.
+- [x] T-14 Estados calculados protegidos; regeneración incremental; archivos revisados/evidencia validada inmutables; empresas/proyectos archivables y usuarios desactivables. Admin de registros de negocio solo consulta. NO_APLICA requiere aprobación humana vinculada a revisión exacta y conserva usuario/fecha/justificación.
+- [x] T-15 Refresh automático en middleware, revocación backend, contraseñas Django y formularios por permisos. Verificaciones HTTP con responsable, lector y auditor; implementador y restricciones de escritura cubiertos por pruebas API. Detalle de control documental completado.
+
+Aceptación cubierta en el entorno local: roles en backend/UI y pruebas negativas para límites de cliente y elevación. Esto no sustituye una revisión de despliegue ni una comprobación visual en navegador.
+
+## Fases posteriores
+
+- [x] T-20 RF-03/04: seeds existentes de 18 requisitos resumidos y pruebas de extracción/upload de TXT, DOCX con tablas, XLSX y PDF con texto real. Sin nuevos módulos de parsing.
+- [x] T-21 RF-05: pgvector real, filtros seguros, reindexación y tareas Celery/Redis. Depende T-13. Ver validación de stack al final.
+
+Aceptación T-21: columna vector real en PostgreSQL, filtros de cliente/modelo antes de ranking SQL, reindexación al cambiar modelo, tareas registradas/reintentables con estado observable, pruebas SQLite y PostgreSQL/Redis con datos QA aislados. No descartar datos SQLite al preparar PostgreSQL.
+- [x] T-22 RF-06/08: contrato v2 validado, IDs completos/únicos, citas verificadas contra contexto, transacción de revisión y errores auditables; cierre con evidencia/humano y aviso explícito de simulación. Prueba adicional con Ollama real aprobada.
+- [ ] T-23 RF-07/09: validar flujo auditor completo, reportes y progreso separado.
+- [x] T-24 Corregir U-01 a U-10: checklist bajo demanda, archivos/citas/historial, formularios accesibles, contraste, errores, trabajos y navegación. Validación de código/HTTP completada; prueba visual y de teclado permanece en T-23.
+
+## Problemas conocidos y siguiente trabajo
+
+Ver auditoría en ARCHITECTURE.md. Conservar SQLite, media, .env, migraciones, logs y archivos no versionados. No ejecutar seed_demo_workspace --force-reset sobre datos existentes. Fase 1 y T-21 completados en entorno local. Próximo bloque: T-23, piloto integral y revisión visual en escritorio/móvil. Añadir prueba de caída forzada y recuperación de trabajos RUNNING antes de considerar operación desatendida.
+
+## Validación ejecutada (2026-10-19)
+
+- Poetry 2.3.3 y Python 3.12: instalación desde lock en backend/.venv; sin instalaciones globales del proyecto.
+- Django check sin errores; makemigrations --check --dry-run sin cambios. Se detectó documents.0005 pendiente; se aplicó correctamente después de copiar SQLite a `.tmp/norman-before-document-control-20261019.sqlite3` y comprobar igualdad de hashes. Ninguna migración anterior se editó.
+- Suite inicial: 25 pruebas, 3 fallaban por requests anónimos en tests documentales. Se autenticó el propietario de pruebas, sin relajar permisos. Suite ampliada: 32 pruebas correctas.
+- npm run build: compilación, tipos y generación de rutas correctos. Se reemplazó el script inválido next lint (sin configuración ESLint operativa) por typecheck explícito.
+- Inicio real: backend /api/health/ y frontend /login devuelven HTTP 200. Configuración local existente usa SQLite/mock; no se cambió .env. Salud IA solo indica configuración.
+- SQLite inspeccionado en modo solo lectura antes de migrar: 2 usuarios, 1 empresa, 1 proyecto, 1 documento, 34 migraciones aplicadas. Tras aplicar documents.0005: mismos conteos de negocio y 35 migraciones. Contenido empresarial preservado.
+- docker compose config --quiet correcto; imágenes y servicios Docker no ejecutados. PostgreSQL, pgvector y Ollama real no acreditados por estas comprobaciones. Sin pruebas visuales/interactivas de UI ni prueba de todos los endpoints con clientes distintos.
+
+## Validación de la reforma (2026-10-19)
+
+- 53 pruebas Django aprobadas: cuatro formatos documentales, JWT/blacklist, roles, aislamiento, descargas, versiones/aprobación documental, exclusión humana, cierre con evidencia y respuestas IA inválidas. Ruff F401/F821 correcto en archivos revisados.
+- Build Next.js aprobado y typecheck correcto. Detector de interfaz sin hallazgos en los componentes nuevos revisados. El navegador de automatización no está disponible; falta verificación visual de escritorio/móvil.
+- Pruebas HTTP sobre base SQLite QA separada y documentos ficticios: empresas, evidencia y detalle documental responden correctamente para responsable, lector y auditor; membresías visibles solo a responsables, formularios de lector deshabilitados y renovación de cookies comprobada.
+- Ollama real: llama3.1:8b + nomic-embed-text, evaluación de un requisito sobre texto ficticio; salida válida, cita comprobada y persistencia exitosa. Embeddings 5.855 ms y revisión 124.640 ms en CPU. Ejemplos/configuración por defecto ahora usan timeout 180 s; .env local conservado.
+- Migraciones companies.0003, token_blacklist, implementation.0005 y reviews.0002 aplicadas con respaldos SQLite previos en .tmp. Conteos de negocio preservados: 2 usuarios, 1 empresa, 1 proyecto y 1 documento. No había exclusiones históricas que reabrir. Cada revisión nueva guarda proveedor explícito y su log incluye review_id; proveedor histórico desconocido queda vacío, sin atribución inventada.
+- Bloqueo inicial resuelto: postgres/postgres conecta con PostgreSQL nativo; vector no está disponible allí. Se inició Docker Desktop y se prepararon PostgreSQL/pgvector y Redis aislados, sin modificar la instalación nativa.
+- Respaldos: `.tmp/norman-before-memberships-20261019-f89d0c4d.sqlite3`, `.tmp/norman-before-applicability-20261019-49e74613.sqlite3` y `.tmp/norman-before-review-provider-20261019-c680764a.sqlite3`. Los datos QA y scripts temporales quedan aislados en .tmp; servidores QA detenidos al terminar.
+
+## Validación del stack y avatar (2026-10-19)
+
+- Suite ampliada: 60 pruebas aprobadas en SQLite y 61 en PostgreSQL real, incluida la regresión final de restauración raw. Cubre separación de modelos, SQL con ranking/límite tras filtros, cláusulas, reindexación, vectores inválidos, permisos/historial de trabajos, broker fallido y reintentos. La prueba raw también pasó aisladamente en SQLite.
+- Prueba real aislada: POST documento → PENDING → Redis → worker Linux → extracción TXT → Ollama nomic-embed-text → vector de 768 dimensiones → SUCCESS → búsqueda SQL con resultado correcto. Base, cola, usuario, empresa, archivo y proyecto QA separados. Worker QA detenido después; worker normal permanece disponible.
+- pgvector 0.8.7 disponible y activo; columna PostgreSQL de tipo vector comprobada. PostgreSQL 15432 y Redis 16379 evitan puertos de otros proyectos. Compose incluye salud, persistencia y arranque del worker. Ollama nativo alcanzable desde el contenedor.
+- Transferencia protegida: respaldo `.tmp/norman-before-pgvector-9dfee6a3.sqlite3`, fixture y manifiesto en .tmp; 270 objetos con contenido serializado idéntico tras importación. 2 usuarios, 1 empresa, 1 proyecto y 1 documento conservados. Backend .env anterior respaldado en `.tmp/backend-env-before-postgres-84398503.bak`; configuración actual usa PostgreSQL/Ollama y worker real.
+- Detectado y corregido en PostgreSQL el bloqueo FOR UPDATE sobre una relación nullable del control documental. Restaurar fixtures ya no dispara creación automática de checklist.
+- Carita sencilla y minimalista elegida por el usuario: componente SVG reutilizable, sin dependencias nuevas, presente en marca y estados reales. Render del componente inspeccionado; build Next.js aprobado. La compilación y el render del avatar no sustituyen QA visual completa del producto.
+- Aplicación local iniciada en 3001 con API 8011: login y salud HTTP 200; HTML del login incluye marca y avatar. PostgreSQL/Redis saludables y worker normal activo. Ruff F401/F821 correcto y migraciones sin diferencias. Configuración anterior del frontend respaldada antes de apuntar a 8011.
+- Comprobación final de documentos/revisiones: 17 pruebas aprobadas después de impedir recuperación de documentos fallidos y de reconstruir chunks cuando cambia el texto extraído. API y worker recargados con ese ajuste.
+
+## Revisión de usabilidad (2026-10-19)
+
+Alcance: login, dashboard, empresas, alta/listado de proyectos, biblioteca, usuarios y diez superficies de proyecto. Sesión admin autorizada. Lectura de código, HTML servido y CSS generado; sin enviar formularios de negocio. No hubo cambios en registros empresariales. El navegador disponible devolvió apps=[] y browsers=[]: no se probó hidratación, navegación con teclado, gestos, capturas ni composición real a distintos tamaños. La evaluación es técnica y no sustituye una prueba con usuarios.
+
+Resultados: 17 rutas normales devolvieron 200; una ruta protegida sin sesión redirigió al login. Dos casos adicionales con error=%25 devolvieron 500. El detector Impeccable devolvió []: las comprobaciones manuales y el análisis de HTML sí identificaron las brechas siguientes. Datos de respaldo de la revisión en .tmp/usability-http-report.json y .tmp/usability-detector.json, ignorados por Git y sin tokens ni contraseñas.
+
+Evaluación orientativa del código/HTML (0–4, no certificación): accesibilidad 1, rendimiento 1, temas/tokens 2, responsive 2 provisional, integridad de implementación 2. Total orientativo 8/20. Responsive y el rendimiento de producción quedan pendientes de medición real; las latencias de Next dev no se usan como benchmark de producción.
+
+| ID | Prioridad | Hallazgo verificado e impacto | Ubicación / corrección propuesta |
+| --- | --- | --- | --- |
+| U-01 | P1 | El checklist renderiza 245 formularios, 732 campos y 8.358.802 bytes de HTML sin comprimir en el proyecto existente, en modo desarrollo. No hay búsqueda, filtro de estado ni paginación: encontrar y trabajar un requisito exige recorrer toda la lista. | projects/[projectId]/checklist/page.tsx:146–160. Resumen por proceso, búsqueda/filtros y formulario bajo demanda por requisito. Medir de nuevo en build de producción. |
+| U-02 | P1 | Evidencia muestra Validar/Rechazar sin enlace al archivo, descripción ni notas de validación. Solo se listan CARGADA y VALIDADA; al rechazar deja de aparecer. Esto impide inspeccionar el soporte y comprender/corregir un rechazo desde esa pantalla. | projects/[projectId]/evidence/page.tsx:47–53, 110–174. Mostrar descarga privada, contexto de requisito/fecha/notas y sección de rechazadas; conservar historial. El backend ya proporciona esos datos. |
+| U-03 | P1 | Revisiones limita las evaluaciones a slice(0,3), recorta descripciones y no muestra evidence_found ni un detalle completo. Un auditor no puede comprobar desde esa vista todas las conclusiones ni las citas que las sustentan. | projects/[projectId]/reviews/page.tsx:132–164 y checklist/page.tsx:180. Detalle navegable de todas las evaluaciones con evidencia citada, documento origen, faltantes, riesgo e historial. |
+| U-04 | P1 | 802 de 827 campos renderizados en las 17 páginas no tienen nombre accesible mediante label asociado, label envolvente o ARIA. Los conteos incluyen campos repetidos por requisito y superficies. Login tiene 2/2 y alta de proyecto 9/9. Ver contraseña usa tabIndex=-1 y queda fuera del recorrido normal de teclado. | login/page.tsx:40–63, password-input.tsx:30 y formularios de empresas/proyectos/checklist/documentos/revisiones/evidencias. Asociar id/htmlFor, etiquetar campos repetidos y permitir acceso al botón por teclado. Control documental ya ofrece un patrón reutilizable correcto. |
+| U-05 | P1 | Contrastes calculados de tokens usados: moss sobre blanco 3,97:1; sobre sand 3,71:1; blanco sobre signal 3,95:1. Hay etiquetas y botones de texto pequeño con estas combinaciones, por debajo del objetivo 4,5:1. | tailwind.config.ts:19–22, login/page.tsx:40 y componentes shell-nav/mobile-shell-menu. Ajustar tokens semánticos de texto/acción y comprobar estados; no cambiar el color del avatar por este motivo decorativo. |
+| U-06 | P2 | /login?error=%25 y /companies?error=%25 devuelven 500: los searchParams ya decodificados pasan otra vez por decodeURIComponent. Un mensaje que contenga un porcentaje puede romper la pantalla que debería explicar el error. | login/page.tsx:19, lib/api.ts:148–157. Usar el valor ya decodificado o una decodificación tolerante y conservar mensajes legibles. |
+| U-07 | P2 | Subir y comparar desde checklist encola trabajo y vuelve al mismo checklist, pero esa pantalla no consulta latest_job ni se actualiza mientras procesa. El estado de trabajos solo aparece en Documentos. El usuario puede creer que la carga no avanzó y repetirla. | checklist/page.tsx:292–310; documents/page.tsx y processing-refresh.tsx sí tienen el patrón. Mostrar estado/enlace directo al documento y actualizar solo mientras el trabajo esté activo. |
+| U-08 | P2 | Documentos, Revisiones, Evidencia e Informe solo aparecen como accesos del resumen. Al entrar en otra superficie, las pestañas persistentes contienen Implementación, Control documental y Registro diario. Cada tarjeta de requisito dirige al checklist completo, sin ancla al requisito elegido. | project-tabs.tsx:6–10, projects/[projectId]/page.tsx:50 y 200–207. Navegación de proyecto persistente, retorno contextual y enlaces con ancla/filtro al requisito. |
+| U-09 | P2 | La revisión manual mantiene una Server Action larga y solo cambia el botón a Revisando; no expone progreso persistente ni recuperación si se abandona la página. Además usa términos como retrieval, prompt y orquestación, y códigos de tipo con guiones bajos. | reviews/page.tsx:52–82, app/actions.ts:runReviewAction. Texto orientado a la tarea y estado de trabajo consultable para las revisiones largas. La carga con revisión opcional ya usa jobs y sirve de base. |
+| U-10 | P2 | getProjectWorkspace carga todas las colecciones del proyecto, incluidos textos documentales y revisiones completas, en cada superficie; se invoca en layout y página. FlashBanner no anuncia éxito/error con role/status ni vincula errores a campos. | lib/api.ts:304–407, components/flash-banner.tsx. Cargas específicas por superficie, comprobar deduplicación real y devolver errores junto al campo sin perder lo escrito. |
+
+Fortalezas que se conservan: la marca y carita son coherentes; autenticación y redirección de rutas privadas funcionan; estados tienen texto además de color; progreso documental e implementación se distinguen; control documental tiene historial, descargas y campos asociados correctamente; las cargas en Documentos muestran estado real y reintentos; el menú móvil incluye nombre accesible y aria-expanded. Estos son patrones para reutilizar.
+
+Orden recomendado: U-02/U-03 para permitir revisión con soporte completo; U-01 para operar el checklist; U-04/U-05 para acceso y lectura; después recuperación, navegación y estados. Criterio del siguiente bloque: un implementador localiza un requisito y carga su documento sin recorrer cientos de campos; un auditor abre el archivo/cita antes de validar, ve rechazos y puede completar el recorrido con teclado. Confirmar escritorio/móvil en navegador cuando esté disponible. Esta revisión no modifica interfaces ni se considera aceptación final de T-23.
+
+## Correcciones de usabilidad verificadas (2026-10-19)
+
+- Ajuste solicitado: navegación del proyecto en una barra desplegable y colapsable, contraída inicialmente, con sección actual visible y diez destinos conservados. Se contrae al seleccionar y contempla Escape con retorno de foco. Tipos correctos y HTML comprobado en implementación, checklist y control documental: HTTP 200, panel asociado y un único enlace actual. Interacción visual pendiente de navegador conectado.
+- U-01: búsqueda por cláusula/título, filtros por proceso/estado, diez resultados por página y detalle de un solo requisito. En el proyecto de trabajo, la vista inicial pasó de 245 formularios / 732 campos a 2 formularios / 3 campos. HTML sin comprimir en desarrollo: 8.358.802 → 139.726 bytes. No es un benchmark de producción. Los enlaces del tablero abren el requisito exacto.
+- U-02/U-03: evidencias con descarga privada, contexto, notas y rechazos conservados; confirmación antes de validar y motivo al rechazar en la UI. Revisiones muestran todas las evaluaciones desplegables, citas literales, faltantes, riesgos, sugerencias disponibles y acceso al documento original; sin truncamiento de hallazgos. El backend conserva sus reglas y autorizaciones.
+- U-04/U-05: FormField vincula cada etiqueta y control, conserva IDs únicos y asocia errores; campos sin etiqueta visual reciben nombre accesible explícito. Ver contraseña vuelve al recorrido de teclado. Hay foco visible, salto al contenido, navegación de proyecto persistente y colores de texto/acción más oscuros. La carita conserva su identidad.
+- U-06/U-07: se eliminó la segunda decodificación de searchParams; ambos casos con error=%25 devuelven 200. Los trabajos se muestran también en el requisito seleccionado y se actualizan mientras están activos.
+- U-08/U-09: navegación persistente entre checklist, documentos, revisiones, planes, evidencias, seguimiento e informe. Revisión manual mediante POST /api/document-reviews/enqueue/, con opciones y solicitante persistidos en DocumentProcessingJob. Responde 202, reutiliza el trabajo equivalente o explica el conflicto con otro trabajo activo; estados y errores consultables. El endpoint síncrono original se conserva para compatibilidad.
+- U-10: cabecera con resumen backend en vez de volver a cargar todas las colecciones; páginas solicitan las colecciones que utilizan. summary=true evita transportar textos extraídos, prompts/contexto/JSON completos cuando no hacen falta; no suprime citas ni evaluaciones. El detalle original sigue disponible. ActionForm devuelve errores junto al formulario sin navegar, mantiene los controles montados y dirige el foco al campo con error; no usa almacenamiento de contraseñas ni archivos en el navegador.
+- Suite PostgreSQL: 65 pruebas aprobadas. Nuevas regresiones de cola manual, opciones, permisos, conflicto de trabajos y resúmenes que conservan evidencia y detalle. Migración aditiva documents.0009 aplicada después del respaldo .tmp/norman-before-usability-20261019.dump. No se eliminaron documentos, trabajos anteriores ni datos de usuarios.
+- QA separada con 12 requisitos, una revisión de 4 evaluaciones y evidencias CARGADA/VALIDADA/RECHAZADA. Responsable, implementador, auditor y lector: citas completas, archivos descargables, rechazo visible, filtros/paginación, IDs únicos y permisos correctos en HTML/API. Se comprobó también API → Redis → worker Linux → revisión SUCCESS con proveedor mock en una base PostgreSQL QA; no se generaron dictámenes simulados en la base de negocio.
+- Comprobación final sobre la aplicación de trabajo: 17 rutas normales con 200; 101 campos renderizados y ninguno sin nombre accesible según el analizador de HTML; detalle de requisito comprobado aparte. Ruta sin sesión redirige al login. Build Next.js, tipos, Ruff F401/F821 y diferencias de migración correctos. Detector sin hallazgos. API/interfaz normales siguen en 8011/3001; servidores y worker QA detenidos, datos QA conservados por separado.
+- Límite de validación: no hay navegador conectado. No se acreditan capturas, gestos, foco/lectura con tecnología asistiva ni retención de formularios tras interacción real. La implementación y sus respuestas están verificadas por tipos, HTML/API y pruebas de backend; el piloto visual/interactivo queda pendiente en T-23.

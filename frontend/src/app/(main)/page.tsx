@@ -69,7 +69,7 @@ export default async function HomePage({
                       >
                         {item.project.name}
                       </h3>
-                      <p className="mt-1 text-sm text-ink/65">
+                      <p className="mt-1 text-sm text-ink/70">
                         {item.project.company_name} - {item.project.standard_name}
                       </p>
                     </div>
@@ -119,7 +119,7 @@ export default async function HomePage({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-semibold text-ink">{item.project.name}</h3>
-                        <p className="mt-1 text-sm text-ink/65">{item.project.standard_name}</p>
+                        <p className="mt-1 text-sm text-ink/70">{item.project.standard_name}</p>
                       </div>
                       <StatusBadge
                         value={item.openPendingCount > 0 ? "OBSERVADO" : "EN_REVISION"}
@@ -127,15 +127,15 @@ export default async function HomePage({
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Doc</p>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Doc</p>
                         <p className="mt-1 font-semibold text-ink">{item.documentaryProgress}%</p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Pend.</p>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Pend.</p>
                         <p className="mt-1 font-semibold text-ink">{item.openPendingCount}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Impl.</p>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Impl.</p>
                         <p className="mt-1 font-semibold text-ink">{item.implementationProgress}%</p>
                       </div>
                     </div>
@@ -161,7 +161,7 @@ export default async function HomePage({
                       </div>
                       <StatusBadge value={plan.status} />
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-ink/72">
+                    <p className="mt-3 text-sm leading-6 text-ink/70">
                       {plan.recommended_action || plan.description || "Sin accion sugerida."}
                     </p>
                   </div>

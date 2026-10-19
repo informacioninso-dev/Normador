@@ -1,3 +1,5 @@
+from apps.companies.api_access import CompanyScopedViewMixin
+from django.http import FileResponse
 from django.db.models import Count
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -7,17 +9,18 @@ from rest_framework.response import Response
 
 from apps.ai_engine.ollama_client import OllamaAPIError
 from apps.ai_engine.retriever import search_chunks
-from apps.documents.models import Document, DocumentChunk
+from apps.documents.models import Document, DocumentChunk, DocumentProcessingJob
 from apps.documents.serializers import (
     DocumentChunkSerializer,
     DocumentSerializer,
     DocumentWriteSerializer,
+    ProcessingJobSerializer,
 )
-from apps.documents.services import index_document_chunks, process_document
+from apps.documents.tasks import enqueue_document
 from apps.common.choices import DocumentProcessingStatus
 
 
-class DocumentViewSet(viewsets.ModelViewSet):
+class DocumentViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     permission_classes = [IsAuthenticated]
@@ -28,7 +31,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return DocumentSerializer
 
     def get_queryset(self):
-        user = self.request.user
         queryset = Document.objects.select_related(
             "project",
             "library_standard",
@@ -39,12 +41,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
             "uploaded_by",
         ).annotate(chunk_count=Count("chunks"))
 
-        # Non-staff users only see their own project docs and global library docs
-        if not user.is_staff:
-            from django.db.models import Q
-            queryset = queryset.filter(
-                Q(is_reference=True) | Q(project__company__created_by=user)
-            )
 
         project_id = self.request.query_params.get("project")
         is_reference = self.request.query_params.get("is_reference")
@@ -89,22 +85,32 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if process_area:
             queryset = queryset.filter(process_area__iexact=process_area)
 
+        if self.request.query_params.get("summary") == "true":
+            queryset = queryset.defer("extracted_text", "extracted_metadata")
         return queryset.order_by("-uploaded_at", "-id")
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded_by = request.user if request.user.is_authenticated else None
+        auto_review = serializer.validated_data.pop("auto_review", False)
+        if auto_review and not serializer.validated_data.get("project"):
+            return Response({"detail": "La revision requiere un proyecto."}, status=400)
         document = serializer.save(uploaded_by=uploaded_by)
-        process_document(document)
+        enqueue_document(document, user=uploaded_by, review_after_processing=auto_review)
+        document.refresh_from_db()
         read_serializer = DocumentSerializer(document, context=self.get_serializer_context())
         headers = self.get_success_headers(read_serializer.data)
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         document = self.get_object()
+        if "auto_review" in request.data:
+            return Response({"detail": "Inicia la revision desde Revisiones."}, status=400)
         if hasattr(document, "control_revision"):
             return Response({"detail": "Crea una nueva version desde Control documental."}, status=400)
+        if document.reviews.exists() or "file" in request.data:
+            return Response({"detail": "Conserva el original. Carga el documento corregido como un nuevo archivo y vuelve a revisarlo."}, status=400)
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
@@ -113,46 +119,49 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Archiva el documento desde Control documental."}, status=400)
         document.status = DocumentProcessingStatus.ARCHIVED
         document.save(update_fields=["status", "updated_at"])
+        if document.checklist_item_id:
+            from apps.implementation.services import recalculate_checklist_item_state
+            recalculate_checklist_item_state(document.checklist_item)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get"])
+    def download(self, request, pk=None):
+        document = self.get_object()
+        response = FileResponse(document.file.open("rb"), as_attachment=True, filename=document.file_name)
+        response["Cache-Control"] = "private, no-store"
+        return response
 
     @action(detail=True, methods=["post"])
     def reprocess(self, request, pk=None):
         document = self.get_object()
         if document.status == DocumentProcessingStatus.ARCHIVED:
             return Response({"detail": "Un documento archivado no puede reprocesarse."}, status=400)
-        process_document(document)
+        previous = document.processing_jobs.first()
+        enqueue_document(document, user=request.user, review_after_processing=bool(previous and previous.status == "FAILED" and previous.review_after_processing))
+        document.refresh_from_db()
         serializer = DocumentSerializer(document, context=self.get_serializer_context())
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"])
     def index_chunks(self, request, pk=None):
         document = self.get_object()
-        overwrite = str(request.data.get("overwrite", "true")).strip().lower() not in {
-            "0",
-            "false",
-            "no",
-        }
-        try:
-            summary = index_document_chunks(
-                document,
-                overwrite=overwrite,
-                created_by=request.user if request.user.is_authenticated else None,
-            )
-        except ValueError as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except OllamaAPIError as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        if document.status != DocumentProcessingStatus.READY:
+            return Response({"detail": "El documento debe estar listo para indexar."}, status=400)
+        job = enqueue_document(document, user=request.user, operation=DocumentProcessingJob.Operation.INDEX)
+        document.refresh_from_db()
         serializer = DocumentSerializer(document, context=self.get_serializer_context())
-        return Response({"document": serializer.data, **summary})
+        return Response(
+            {"document": serializer.data, "job": ProcessingJobSerializer(job).data, **job.result},
+            status=200 if job.status == DocumentProcessingJob.Status.SUCCESS else 202,
+        )
+
+    @action(detail=True, methods=["get"])
+    def processing_jobs(self, request, pk=None):
+        document = self.get_object()
+        return Response(ProcessingJobSerializer(document.processing_jobs.all(), many=True).data)
 
 
-class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
+class DocumentChunkViewSet(CompanyScopedViewMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = DocumentChunkSerializer
     permission_classes = [IsAuthenticated]
 
@@ -208,7 +217,11 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["post"])
     def semantic_search(self, request):
-        query = (request.data.get("query") or "").strip()
+        raw_query = request.data.get("query") or ""
+        clause = request.data.get("clause")
+        if not isinstance(raw_query, str) or (clause is not None and not isinstance(clause, str)):
+            return Response({"detail": "La consulta y la clausula deben ser texto."}, status=400)
+        query = raw_query.strip()
         if not query:
             return Response(
                 {"query": "This field is required."},
@@ -217,6 +230,12 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
 
         limit = request.data.get("limit")
         try:
+            limit = int(limit) if limit is not None else None
+            if limit is not None and not 1 <= limit <= 50:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({"limit": "Usa un entero entre 1 y 50."}, status=400)
+        try:
             results = search_chunks(
                 query,
                 project_id=request.data.get("project"),
@@ -224,9 +243,11 @@ class DocumentChunkViewSet(viewsets.ReadOnlyModelViewSet):
                 requirement_id=request.data.get("requirement"),
                 standard_id=request.data.get("standard"),
                 document_type=request.data.get("document_type"),
-                limit=int(limit) if limit else None,
+                clause=clause,
+                limit=limit,
+                user=request.user,
             )
-        except OllamaAPIError as exc:
+        except (OllamaAPIError, ValueError) as exc:
             return Response(
                 {"detail": str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,

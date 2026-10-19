@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
 from apps.accounts.serializers import (
     LoginSerializer,
@@ -40,13 +41,9 @@ class RefreshView(APIView):
         if not token:
             return Response({"detail": "refresh requerido."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            refresh = RefreshToken(token)
-            return Response(
-                {
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                }
-            )
+            serializer = TokenRefreshSerializer(data={"refresh": token})
+            serializer.is_valid(raise_exception=True)
+            return Response({**serializer.validated_data, "refresh": token})
         except TokenError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -55,6 +52,13 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        token = request.data.get("refresh")
+        if not token:
+            return Response({"detail": "refresh requerido."}, status=400)
+        try:
+            RefreshToken(token).blacklist()
+        except TokenError:
+            pass  # Logout is idempotent, including a previously revoked refresh token.
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -86,4 +90,6 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"detail": "No puedes eliminarte a ti mismo."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return super().destroy(request, *args, **kwargs)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        return Response(status=204)

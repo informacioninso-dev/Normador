@@ -6,22 +6,48 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from django.conf import settings
+from django.db import transaction
 
 from apps.ai_engine.models import AIProviderLog
 from apps.ai_engine.ollama_client import OllamaClient
-from apps.common.choices import AILogStatus, AIOperationType, AIProvider, EmbeddingStatus
+from apps.common.choices import (
+    AILogStatus,
+    AIOperationType,
+    AIProvider,
+    EmbeddingStatus,
+)
 from apps.documents.models import Document, DocumentChunk
 
 
 TOKEN_PATTERN = re.compile(r"\w+", re.UNICODE)
 
 
+def validate_vectors(vectors, *, count):
+    if not isinstance(vectors, list) or len(vectors) != count:
+        raise ValueError("Embedding provider returned a different number of embeddings")
+    dimensions = None
+    for vector in vectors:
+        if not isinstance(vector, list) or not vector:
+            raise ValueError("Embedding vectors must be nonempty lists")
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, (float, int))
+            or not math.isfinite(value)
+            for value in vector
+        ):
+            raise ValueError("Embedding vectors must contain finite numbers")
+        if dimensions is not None and len(vector) != dimensions:
+            raise ValueError("Embedding vectors must have consistent dimensions")
+        if not any(vector):
+            raise ValueError("Embedding vectors must have a nonzero norm")
+        dimensions = len(vector)
+
+
 class EmbeddingProvider(Protocol):
     provider_name: str
     model_name: str
 
-    def embed_texts(self, texts: list[str]) -> tuple[list[list[float]], dict]:
-        ...
+    def embed_texts(self, texts: list[str]) -> tuple[list[list[float]], dict]: ...
 
 
 @dataclass
@@ -44,7 +70,10 @@ class MockEmbeddingProvider:
 
     def embed_texts(self, texts: list[str]) -> tuple[list[list[float]], dict]:
         embeddings = [self._embed_single(text) for text in texts]
-        return embeddings, {"embedding_count": len(embeddings), "dimensions": self.dimensions}
+        return embeddings, {
+            "embedding_count": len(embeddings),
+            "dimensions": self.dimensions,
+        }
 
     def _embed_single(self, text: str) -> list[float]:
         vector = [0.0] * self.dimensions
@@ -102,54 +131,57 @@ def embed_document_chunks(
         embeddings, raw_response = provider.embed_texts(texts)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
-        if len(embeddings) != len(chunks):
-            raise ValueError("Embedding provider returned a different number of embeddings")
+        validate_vectors(embeddings, count=len(chunks))
 
         for chunk, vector in zip(chunks, embeddings):
             chunk.embedding = vector
+            chunk.embedding_vector = vector
             chunk.embedding_dimensions = len(vector)
             chunk.embedding_provider = provider.provider_name
             chunk.embedding_model = provider.model_name
             chunk.embedding_status = EmbeddingStatus.READY
             chunk.embedding_error = ""
 
-        DocumentChunk.objects.bulk_update(
-            chunks,
-            [
-                "embedding",
-                "embedding_dimensions",
-                "embedding_provider",
-                "embedding_model",
-                "embedding_status",
-                "embedding_error",
-            ],
-        )
+        with transaction.atomic():
+            DocumentChunk.objects.bulk_update(
+                chunks,
+                [
+                    "embedding",
+                    "embedding_vector",
+                    "embedding_dimensions",
+                    "embedding_provider",
+                    "embedding_model",
+                    "embedding_status",
+                    "embedding_error",
+                ],
+            )
 
-        AIProviderLog.objects.create(
-            provider=provider.provider_name,
-            model_name=provider.model_name,
-            operation_type=AIOperationType.EMBEDDING,
-            status=AILogStatus.SUCCESS,
-            request_payload=request_summary,
-            response_payload={
-                "embedding_count": len(embeddings),
-                "dimensions": len(embeddings[0]) if embeddings else 0,
-                "provider_meta": {
-                    key: value
-                    for key, value in raw_response.items()
-                    if key != "embeddings"
-                }
-                if isinstance(raw_response, dict)
-                else {},
-            },
-            latency_ms=duration_ms,
-            created_by=created_by,
-        )
+            AIProviderLog.objects.create(
+                provider=provider.provider_name,
+                model_name=provider.model_name,
+                operation_type=AIOperationType.EMBEDDING,
+                status=AILogStatus.SUCCESS,
+                request_payload=request_summary,
+                response_payload={
+                    "embedding_count": len(embeddings),
+                    "dimensions": len(embeddings[0]) if embeddings else 0,
+                    "provider_meta": {
+                        key: value
+                        for key, value in raw_response.items()
+                        if key != "embeddings"
+                    }
+                    if isinstance(raw_response, dict)
+                    else {},
+                },
+                latency_ms=duration_ms,
+                created_by=created_by,
+            )
         return len(chunks)
     except Exception as exc:
         duration_ms = int((time.perf_counter() - started) * 1000)
         for chunk in chunks:
             chunk.embedding = []
+            chunk.embedding_vector = None
             chunk.embedding_dimensions = 0
             chunk.embedding_provider = provider.provider_name
             chunk.embedding_model = provider.model_name
@@ -159,6 +191,7 @@ def embed_document_chunks(
             chunks,
             [
                 "embedding",
+                "embedding_vector",
                 "embedding_dimensions",
                 "embedding_provider",
                 "embedding_model",

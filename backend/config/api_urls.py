@@ -7,7 +7,7 @@ from apps.action_plans.views import (
     EvidenceViewSet,
     ImplementationActivityViewSet,
 )
-from apps.companies.views import CompanyViewSet
+from apps.companies.views import CompanyViewSet, CompanyMembershipViewSet
 from apps.documents.views import DocumentChunkViewSet, DocumentViewSet
 from apps.documents.control_views import ControlledDocumentViewSet
 from apps.implementation.views import (
@@ -22,6 +22,7 @@ from apps.standards.views import StandardRequirementViewSet, StandardViewSet
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="user")
 router.register("companies", CompanyViewSet, basename="company")
+router.register("company-memberships", CompanyMembershipViewSet, basename="company-membership")
 router.register("projects", ProjectViewSet, basename="project")
 router.register("worklogs", WorkLogEntryViewSet, basename="worklog")
 router.register("worklog-evidences", WorkLogEvidenceViewSet, basename="worklog-evidence")

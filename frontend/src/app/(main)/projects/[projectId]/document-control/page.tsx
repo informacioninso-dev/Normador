@@ -1,3 +1,4 @@
+import { RoleForm } from "@/components/role-form";
 import { Download, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 
@@ -47,7 +48,7 @@ export default async function DocumentControlPage({ params, searchParams }: {
         <summary className="flex w-fit cursor-pointer list-none items-center gap-2 text-sm font-semibold text-emerald-800">
           <Plus size={18} /> Nuevo documento
         </summary>
-        <form action={createControlledDocumentAction} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <RoleForm allowed={Boolean(project?.can_edit)} action={createControlledDocumentAction} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <input type="hidden" name="project" value={projectId} />
           <label className="dc-label">Tipo
             <select name="kind" defaultValue="POE" required>
@@ -74,7 +75,7 @@ export default async function DocumentControlPage({ params, searchParams }: {
           <div className="md:col-span-2 xl:col-span-3">
             <SubmitButton label="Crear borrador" pendingLabel="Generando..." className="!rounded-md !bg-emerald-800 !text-white !py-2" />
           </div>
-        </form>
+        </RoleForm>
       </details>
 
       <div className="overflow-x-auto">

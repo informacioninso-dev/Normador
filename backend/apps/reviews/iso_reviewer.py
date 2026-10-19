@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.ai_engine.models import AIProviderLog
-from apps.ai_engine.ollama_client import OllamaAPIError, OllamaClient
+from apps.ai_engine.ollama_client import OllamaClient
 from apps.ai_engine.prompt_builder import build_document_review_prompt
 from apps.ai_engine.retriever import search_chunks
 from apps.action_plans.services import (
@@ -29,6 +29,7 @@ from apps.common.choices import (
 from apps.documents.services import index_document_chunks
 from apps.implementation.services import recalculate_checklist_item_state, resolve_project_checklist_item
 from apps.reviews.models import DocumentReview, Finding, RequirementEvaluation
+from apps.reviews.validation import validate_review_output
 
 
 RISK_PRIORITY = {
@@ -286,8 +287,15 @@ def run_document_review(
     if not requirements:
         raise ValueError("No requirements were resolved for this review.")
 
-    if not document.chunks.filter(embedding_status=EmbeddingStatus.READY).exists():
-        index_document_chunks(document, overwrite=True, created_by=created_by)
+    from apps.ai_engine.embeddings import get_default_embedding_provider
+    retrieval_provider = retrieval_provider or get_default_embedding_provider()
+    chunks = document.chunks.all()
+    if not chunks.exists() or chunks.exclude(
+        embedding_status=EmbeddingStatus.READY,
+        embedding_provider=retrieval_provider.provider_name,
+        embedding_model=retrieval_provider.model_name,
+    ).exists():
+        index_document_chunks(document, overwrite=False, provider=retrieval_provider, created_by=created_by)
 
     retrieved_context = _build_retrieved_context(
         document,
@@ -327,33 +335,39 @@ def run_document_review(
     try:
         response_payload, provider_meta = provider.run_review(execution_context)
         normalized = normalize_review_output(response_payload, requirements)
+        for evaluation in normalized["requirement_evaluations"]:
+            citation = " ".join(evaluation["evidence_found"].split())
+            chunks = retrieved_context[str(evaluation["requirement_id"])].get("chunks", [])
+            source = " ".join(" ".join(chunk["content"].split()) for chunk in chunks)
+            if citation and citation not in source:
+                raise ReviewProviderError("La evidencia citada no aparece en el contexto del documento evaluado.")
         latency_ms = int((time.perf_counter() - started) * 1000)
-        review = _persist_review(
-            document=document,
-            standard=standard,
-            review_type=review_type,
-            prompt_bundle=prompt_bundle,
-            retrieved_context=retrieved_context,
-            normalized_output=normalized,
-            raw_response=response_payload,
-            ai_model_used=provider.model_name,
-            created_by=created_by,
-        )
-        _update_checklist_from_review(review)
-        AIProviderLog.objects.create(
-            provider=provider.provider_name,
-            model_name=provider.model_name,
-            operation_type=AIOperationType.REVIEW,
-            status=AILogStatus.SUCCESS,
-            prompt_version=prompt_bundle.prompt_version,
-            request_payload=request_payload,
-            response_payload=provider_meta.get("raw", response_payload),
-            latency_ms=latency_ms,
-            created_by=created_by,
-        )
+        with transaction.atomic():
+            review = _persist_review(
+                document=document,
+                standard=standard,
+                review_type=review_type,
+                prompt_bundle=prompt_bundle,
+                retrieved_context=retrieved_context,
+                normalized_output=normalized,
+                raw_response=response_payload,
+                ai_model_used=provider.model_name,
+                provider_name=provider.provider_name,
+                created_by=created_by,
+            )
+            _update_checklist_from_review(review)
+            AIProviderLog.objects.create(
+                provider=provider.provider_name,
+                model_name=provider.model_name,
+                operation_type=AIOperationType.REVIEW,
+                status=AILogStatus.SUCCESS,
+                prompt_version=prompt_bundle.prompt_version,
+                request_payload={**request_payload, "review_id": review.pk},
+                response_payload=provider_meta.get("raw", response_payload),
+                latency_ms=latency_ms,
+                created_by=created_by,
+            )
         return review
-    except OllamaAPIError:
-        raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
         AIProviderLog.objects.create(
@@ -372,6 +386,10 @@ def run_document_review(
 
 
 def normalize_review_output(payload: dict, requirements: list) -> dict:
+    try:
+        validate_review_output(payload, requirements)
+    except ValueError as exc:
+        raise ReviewProviderError(f"Salida IA invalida: {exc}") from exc
     if not isinstance(payload, dict):
         raise ReviewProviderError("Review provider returned a non-object payload.")
 
@@ -399,9 +417,9 @@ def normalize_review_output(payload: dict, requirements: list) -> dict:
             "risk_level": _normalize_risk(item.get("risk_level")),
             "recommendation": str(item.get("recommendation") or "").strip(),
             "suggested_text": str(item.get("suggested_text") or "").strip(),
-            "can_close_requirement": bool(item.get("can_close_requirement")),
+            "can_close_requirement": bool(item.get("can_close_requirement")) and not requirement.requires_real_evidence,
             "requires_real_evidence": bool(
-                item.get("requires_real_evidence", requirement.requires_real_evidence)
+                item.get("requires_real_evidence", requirement.requires_real_evidence) or requirement.requires_real_evidence
             ),
             "missing_documents_or_evidence": [
                 str(value).strip()
@@ -564,6 +582,7 @@ def _persist_review(
     normalized_output: dict,
     raw_response: dict,
     ai_model_used: str,
+    provider_name: str,
     created_by,
 ) -> DocumentReview:
     review = DocumentReview.objects.create(
@@ -580,6 +599,7 @@ def _persist_review(
         raw_response=raw_response,
         retrieved_context=retrieved_context,
         ai_model_used=ai_model_used,
+        provider=provider_name,
         created_by=created_by,
     )
 

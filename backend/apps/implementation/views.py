@@ -1,9 +1,12 @@
-from django.db.models import Count, Q
+from apps.companies.api_access import CompanyScopedViewMixin
+from apps.companies.access import scope_queryset, WRITE_ROLES
+from django.db.models import Count
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.choices import WorklogStatus
@@ -27,22 +30,23 @@ from apps.implementation.services import (
 from apps.implementation.models import WorkLogEntry
 
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
 
     def get_permissions(self):
-        if self.action == "destroy":
-            return [IsAdminUser()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        user = self.request.user
         qs = Project.objects.select_related("company", "standard").annotate(
             checklist_items_count=Count("checklist_items")
         )
-        if user.is_staff:
-            return qs
-        return qs.filter(company__created_by=user)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        project = self.get_object()
+        project.status = "ARCHIVED"
+        project.save(update_fields=["status", "updated_at"])
+        return Response(status=204)
 
     @action(detail=True, methods=["post"])
     def regenerate_checklist(self, request, pk=None):
@@ -57,6 +61,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
             "true",
             "yes",
         }
+        if overwrite:
+            return Response({"detail": "El checklist conserva su historial. Regenera sin sobrescribir."}, status=400)
+        if use_library and not request.user.is_staff:
+            return Response({"detail": "Solo el administrador puede actualizar el catalogo normativo global."}, status=403)
         if use_library:
             summary = regenerate_checklist_from_reference_library(
                 project,
@@ -87,13 +95,36 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(report)
 
 
-class ImplementationChecklistItemViewSet(
+class ImplementationChecklistItemViewSet(CompanyScopedViewMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
     serializer_class = ImplementationChecklistItemSerializer
+
+    @action(detail=True, methods=["post"])
+    def confirm_not_applicable(self, request, pk=None):
+        item = self.get_object()
+        justification = str(request.data.get("justification") or "").strip()
+        if request.data.get("confirmed") is not True or not justification:
+            return Response({"detail": "Confirma la revision humana e indica una justificacion."}, status=400)
+        from apps.reviews.models import RequirementEvaluation
+        from apps.implementation.services import recalculate_checklist_item_state
+        with transaction.atomic():
+            item = ImplementationChecklistItem.objects.select_for_update().get(pk=item.pk)
+            evaluation = RequirementEvaluation.objects.filter(
+                document_review__project=item.project, requirement=item.requirement,
+            ).exclude(document_review__document__status="ARCHIVADO").order_by("-document_review__created_at", "-id").first()
+            if not evaluation or evaluation.status != "NO_APLICA":
+                return Response({"detail": "La ultima revision debe indicar NO_APLICA."}, status=400)
+            item.not_applicable_approved_by = request.user
+            item.not_applicable_approved_at = timezone.now()
+            item.not_applicable_review_id = evaluation.document_review_id
+            item.not_applicable_justification = justification
+            item.save(update_fields=["not_applicable_approved_by", "not_applicable_approved_at", "not_applicable_review", "not_applicable_justification", "updated_at"])
+            recalculate_checklist_item_state(item)
+        return Response(self.get_serializer(item).data)
 
     def get_queryset(self):
         queryset = ImplementationChecklistItem.objects.select_related(
@@ -116,12 +147,11 @@ class ImplementationChecklistItemViewSet(
         return queryset.order_by("requirement__sequence", "requirement__clause", "id")
 
 
-class WorkLogEntryViewSet(viewsets.ModelViewSet):
+class WorkLogEntryViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     serializer_class = WorkLogEntrySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
         queryset = WorkLogEntry.objects.select_related(
             "project",
             "action_plan",
@@ -129,10 +159,6 @@ class WorkLogEntryViewSet(viewsets.ModelViewSet):
             "approved_by",
             "created_by",
         ).annotate(evidence_count=Count("evidences"))
-        if not user.is_staff:
-            queryset = queryset.filter(
-                Q(consultant=user) | Q(project__company__created_by=user)
-            ).distinct()
         project_id = self.request.query_params.get("project")
         consultant_id = self.request.query_params.get("consultant")
         status_code = self.request.query_params.get("status")
@@ -186,10 +212,14 @@ class WorkLogEntryViewSet(viewsets.ModelViewSet):
                 {"detail": "project and instruction are required."},
                 status=400,
             )
+        try:
+            project_id = int(project_id)
+            if project_id <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"project": "Usa un identificador entero positivo."}, status=400)
 
-        project_queryset = Project.objects.select_related("company", "standard")
-        if not request.user.is_staff:
-            project_queryset = project_queryset.filter(company__created_by=request.user)
+        project_queryset = scope_queryset(Project.objects.select_related("company", "standard"), request.user, WRITE_ROLES)
         project = project_queryset.filter(id=project_id).first()
         if project is None:
             return Response({"detail": "Project not found."}, status=404)
@@ -216,7 +246,7 @@ class WorkLogEntryViewSet(viewsets.ModelViewSet):
             if value not in {"", None}
         }
 
-        serializer = WorkLogEntryCreateSerializer(data=payload)
+        serializer = WorkLogEntryCreateSerializer(data=payload, context=self.get_serializer_context())
         serializer.is_valid(raise_exception=True)
         worklog = serializer.save(
             consultant=request.user,
@@ -286,7 +316,7 @@ class WorkLogEntryViewSet(viewsets.ModelViewSet):
         return Response(WorkLogEntrySerializer(worklog).data)
 
 
-class WorkLogEvidenceViewSet(viewsets.ModelViewSet):
+class WorkLogEvidenceViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated]
 
@@ -296,16 +326,11 @@ class WorkLogEvidenceViewSet(viewsets.ModelViewSet):
         return WorkLogEvidenceSerializer
 
     def get_queryset(self):
-        user = self.request.user
         queryset = WorkLogEvidence.objects.select_related(
             "worklog",
             "worklog__project",
             "uploaded_by",
         )
-        if not user.is_staff:
-            queryset = queryset.filter(
-                Q(uploaded_by=user) | Q(worklog__project__company__created_by=user)
-            ).distinct()
 
         project_id = self.request.query_params.get("project")
         worklog_id = self.request.query_params.get("worklog")

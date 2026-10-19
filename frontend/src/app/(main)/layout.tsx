@@ -4,30 +4,14 @@ import { BrandLockup } from "@/components/brand-lockup";
 import { MobileShellMenu } from "@/components/mobile-shell-menu";
 import { ShellNav } from "@/components/shell-nav";
 import { UserMenu } from "@/components/user-menu";
-import { getAuthHeaders } from "@/lib/auth";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
-
-async function getCurrentUser() {
-  try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/api/auth/me/`, {
-      cache: "no-store",
-      headers: { Accept: "application/json", ...headers },
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as { username: string; is_staff: boolean };
-  } catch {
-    return null;
-  }
-}
+import { getCurrentUser } from "@/lib/api";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 
   return (
     <div className="min-h-screen bg-app-texture">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-white focus:p-4">Saltar al contenido principal</a>
       <div className="mx-auto flex min-h-screen max-w-[1640px] flex-col gap-4 px-3 py-3 sm:px-4 md:px-6 md:py-6 lg:flex-row lg:gap-6">
         <MobileShellMenu user={user} />
 
@@ -69,7 +53,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
               </Link>
             </div>
           </header>
-          <main className="pb-8 print-area">{children}</main>
+          <main id="main-content" tabIndex={-1} className="pb-8 print-area">{children}</main>
         </div>
       </div>
     </div>

@@ -1,193 +1,103 @@
-# Normador
+﻿# NORMAN AI
 
-Base tecnica inicial para el MVP local de `Normador`.
+Plataforma local de implementación ISO y regulatoria. Conecta requisitos, documentos, revisiones, hallazgos, acciones y evidencia; distingue avance documental de implementación real. Código existente reutilizado de AudiBot ISO/Normador.
 
-## Estado actual
+## Tecnologías y estructura
 
-Esta primera fase deja listo el esqueleto del proyecto:
+Django 5.2 + DRF/JWT en `backend/`; Next.js 15 + React 19 + TypeScript + Tailwind en `frontend/`. Python 3.12 y Poetry 2.3; Node.js 20+ y npm. PostgreSQL 16 con pgvector, Ollama local y trabajos Celery/Redis operativos. SQLite conserva una alternativa de desarrollo con búsqueda NumPy y ejecución inmediata de tareas.
 
-- `backend/` con Django 5 y apps base del dominio
-- `frontend/` con scaffold de Next.js + TypeScript + Tailwind
-- `infra/` con Dockerfiles y `docker-compose.yml`
-- `docs/` con guia de arranque local
+Especificación vigente: [SPEC.md](SPEC.md). Arquitectura y auditoría: [ARCHITECTURE.md](ARCHITECTURE.md). Trabajo y validación: [TASKS.md](TASKS.md). `docs/legacy/` conserva guías y planes históricos. Dockerfiles en `infra/docker/` y compose en raíz.
 
-## Estructura
+## Instalación local (PowerShell)
 
-```text
-backend/
-frontend/
-infra/
-docs/
-AGENTS.md
-IMPLEMENTATION_PLAN.md
-```
-
-## Arranque rapido
-
-### Backend
+Instalar Python 3.12, Poetry y Node/npm como herramientas; todas las dependencias del proyecto se instalan en su entorno. No ejecutar pip global para el backend.
 
 ```powershell
-py -m pip install -r backend/requirements.txt
-Copy-Item backend/.env.example backend/.env
-py backend/manage.py migrate
-py backend/manage.py seed_standards
-py backend/manage.py runserver
+# Desde la raiz; no sobrescribir archivos existentes.
+if (-not (Test-Path backend/.env)) { Copy-Item backend/.env.example backend/.env }
+docker compose up -d postgres redis
+Set-Location backend
+poetry config virtualenvs.in-project true --local
+poetry env use python3.12
+# En Windows, si no existe ese alias, usar la ruta completa de Python312/python.exe.
+poetry install
+# Solo si NO existe .env; no sobrescribir configuraciones existentes:
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+poetry run python manage.py check
+poetry run python manage.py migrate
+poetry run python manage.py seed_standards
+poetry run python manage.py createsuperuser
+poetry run python manage.py runserver 127.0.0.1:8011
 ```
 
-### Frontend
+Poetry mantiene `backend/.venv`, `pyproject.toml` y `poetry.lock`. Los cambios de dependencias se realizan con `poetry add`/`poetry add --group dev`; versionar el lock actualizado.
+
+En otra terminal desde la raíz, iniciar el worker Linux: `docker compose up -d --build worker`. Después, iniciar frontend:
 
 ```powershell
-Copy-Item frontend/.env.example frontend/.env.local
 Set-Location frontend
-npm install
-npm run dev
+if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
+# En ejecución local, usar http://localhost:8011 en .env.local.
+npm ci
+npm run dev -- --port 3001
 ```
 
-## Nota
+Abrir http://localhost:3001/login y usar el usuario creado. Salud: http://localhost:8011/api/health/. El indicador IA configurada no acredita conexión efectiva a Ollama. Los puertos separados evitan conflictos con otros proyectos.
 
-La configuracion de contenedores queda preparada en `docker-compose.yml`. Para usarla, asegurese de tener `Docker Desktop` con el engine levantado.
+## Variables de entorno
 
-## APIs base de Fase 1
+Consultar `.env.example` y `backend/.env.example`. Backend carga `.env` de raíz y luego backend; variables del proceso tienen prioridad y valores ya cargados no se sobrescriben. No publicar esos archivos.
 
-- `GET /api/health/`
-- `GET, POST /api/companies/`
-- `GET, POST /api/projects/`
-- `POST /api/projects/{id}/regenerate_checklist/`
-- `GET /api/standards/`
-- `GET /api/requirements/?standard_code=ISO_13485`
-- `GET /api/checklist-items/?project={project_id}`
+- `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `TIME_ZONE`.
+- `DB_ENGINE=postgres`; `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT=15432` para el contenedor desde Windows. Dentro de Docker se usa `postgres:5432`.
+- `AI_PROVIDER=ollama`, `OLLAMA_BASE_URL=http://localhost:11434`, `OLLAMA_CHAT_MODEL=llama3.1:8b`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text`.
+- `AI_REQUEST_TIMEOUT_SECONDS=180`, `CHUNK_SIZE_WORDS=1000`, `CHUNK_OVERLAP_WORDS=150`, `SEMANTIC_SEARCH_TOP_K=5`, `REVIEW_CONTEXT_TOP_K=3`.
+- `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`; frontend `NEXT_PUBLIC_API_BASE_URL=http://localhost:8011`.
+- `REDIS_URL=redis://localhost:16379/0`, `CELERY_TASK_ALWAYS_EAGER=false`. En Docker se usa `redis://redis:6379/0`. Solo para desarrollo sin broker: `DB_ENGINE=sqlite`, `CELERY_TASK_ALWAYS_EAGER=true` y `AI_PROVIDER=mock`.
 
-Al crear un `Project`, el sistema genera automaticamente items del checklist usando los requisitos de la norma seleccionada.
+Para pruebas sin Ollama, usar `AI_PROVIDER=mock`: resultados simulados, sin valor como dictamen normativo. Para IA real, instalar Ollama y descargar ambos modelos configurados. Se conservan proveedores internos, sin LangChain.
 
-## APIs base de Fase 2
+Se verificó una revisión real con llama3.1:8b y nomic-embed-text sobre datos ficticios: embeddings en 5,9 s y revisión en 124,6 s con CPU. El timeout local usa 180 s. La configuración previa se respaldó antes de activar PostgreSQL y Ollama.
 
-- `GET, POST /api/documents/`
-- `POST /api/documents/{id}/reprocess/`
+## Pruebas
 
-Tipos soportados para extraccion inicial:
-
-- `.txt`
-- `.docx`
-- `.xlsx`
-- `.pdf`
-
-Si el documento se asocia a un item del checklist, el sistema lo mueve a `EN_REVISION` cuando la extraccion termina correctamente.
-
-## APIs base de Fase 3
-
-- `POST /api/documents/{id}/index_chunks/`
-- `GET /api/document-chunks/?document={document_id}`
-- `POST /api/document-chunks/semantic_search/`
-
-Variables nuevas del pipeline:
-
-- `AI_PROVIDER`
-- `OLLAMA_EMBEDDING_MODEL`
-- `AI_REQUEST_TIMEOUT_SECONDS`
-- `CHUNK_SIZE_WORDS`
-- `CHUNK_OVERLAP_WORDS`
-- `SEMANTIC_SEARCH_TOP_K`
-
-Para desarrollo sin `Ollama`, puedes usar temporalmente:
-
-```env
-AI_PROVIDER=mock
+```powershell
+Set-Location backend
+poetry check --lock
+poetry run python manage.py check
+poetry run python manage.py makemigrations --check --dry-run
+$env:AI_PROVIDER='mock'
+$env:CELERY_TASK_ALWAYS_EAGER='true'
+poetry run python manage.py test --noinput
 ```
 
-Eso habilita embeddings deterministas de prueba para indexar y validar retrieval sin depender del servicio local de IA.
+```powershell
+Set-Location frontend
+npm run build
+```
 
-## APIs base de Fase 4
+Las pruebas Django utilizan una base de pruebas separada. No ejecutar seeds de reinicio sobre datos de trabajo. El frontend existente no tiene suite automatizada de interacción; una compilación valida tipos y rutas, no todos los flujos de usuario.
 
-- `GET, POST /api/document-reviews/`
-- `GET /api/requirement-evaluations/?review={review_id}`
-- `GET /api/findings/?review={review_id}`
+## Contenedores y conservación
 
-El `POST /api/document-reviews/` ejecuta el flujo completo:
+Docker Desktop ejecuta PostgreSQL (`127.0.0.1:15432`), Redis (`127.0.0.1:16379`) y el worker Linux. Ollama nativo escucha en 11434; los contenedores lo alcanzan por host.docker.internal. `docker compose up -d --build` también permite ejecutar API e interfaz en 8011/3001; detener primero sus procesos locales para liberar esos puertos. Los entornos Poetry Linux usan volúmenes separados del .venv Windows.
 
-1. valida que el documento este en `LISTO`
-2. indexa chunks si aun no existen embeddings listos
-3. recupera contexto relevante por requisito
-4. construye el prompt de revision
-5. ejecuta IA con proveedor `mock` u `ollama`
-6. valida y persiste la salida estructurada
-7. actualiza el estado del checklist
+El servicio Ollama de compose es opcional (`--profile bundled-ollama`, puerto 11435). Para usarlo en lugar del Ollama nativo, definir `OLLAMA_DOCKER_BASE_URL=http://ollama:11434` al iniciar backend/worker y descargar los modelos allí. No se necesitan dos servidores Ollama para la instalación local actual.
 
-Si no existe un `PromptTemplate` activo con slug `document-review-v1`, el sistema usa un prompt interno versionado por codigo.
+PostgreSQL y Redis conservan sus volúmenes; no ejecutar `down -v` sobre datos de trabajo. Ejecutar migraciones explícitamente con `docker compose exec backend poetry run python manage.py migrate` al preparar una base nueva. Cambiar variables de contraseña no modifica automáticamente una base ya inicializada.
 
-## APIs base de Fase 5
+Preservar `backend/db.sqlite3`, `backend/media`, configuraciones locales, migraciones y documentos. No ejecutar limpiezas indiscriminadas. Empresas/proyectos se archivan y usuarios se desactivan para conservar trazabilidad.
 
-- `GET, POST /api/action-plans/`
-- `PATCH /api/action-plans/{id}/`
-- `POST /api/action-plans/{id}/start_progress/`
-- `POST /api/action-plans/{id}/resolve/`
-- `POST /api/action-plans/{id}/close_plan/`
-- `GET, POST /api/implementation-activities/`
-- `GET, POST /api/evidences/`
-- `PATCH /api/evidences/{id}/`
-- `POST /api/evidences/{id}/validate_evidence/`
-- `POST /api/evidences/{id}/reject_evidence/`
+## Operación por empresa
 
-Comportamiento nuevo del flujo:
+Un administrador crea las cuentas en Usuarios. En Empresas, un responsable o administrador asigna la cuenta existente a una empresa con rol Responsable, Implementador, Auditor o Lector. El propietario conserva responsabilidad; las empresas heredadas sin propietario solo las administra staff hasta asignar membresías.
 
-1. cada `Finding` generado por revision crea un `ActionPlan` automatico
-2. la evidencia real se registra por separado en `Evidence`
-3. al validar evidencia real, el checklist puede pasar a `IMPLEMENTADO`
-4. un `ActionPlan` solo puede cerrarse si la ultima revision ya cumple
-5. si el requisito exige evidencia real, el cierre del plan requiere `Evidence` validada
-6. al cerrar todos los pendientes aplicables, el checklist pasa a `CERRADO`
+Los formularios muestran permisos derivados del backend. Las descargas son privadas. NO_APLICA necesita justificación y aprobación humana en el checklist; una nueva revisión invalida esa aprobación. Las correcciones de documentos revisados se cargan como nuevos archivos o versiones. El detalle de control documental permite editar plantillas, subir correcciones, enviar a revisión y aprobar conservando versiones.
 
-Tambien se superceden automaticamente los planes auto-generados viejos cuando una revision mas reciente reemplaza la brecha del mismo requisito.
+Sesión: access de 15 minutos, refresh de 30 días y renovación automática. Cerrar sesión revoca refresh; los access emitidos vencen por TTL. Para mantenimiento puede ejecutarse `poetry run python manage.py flushexpiredtokens` periódicamente.
 
-## Frontend MVP de Fase 6
+La carga devuelve el documento con `latest_job`; Documentos muestra cola, ejecución, reintentos, resultado y errores, actualizándose mientras hay trabajo pendiente. `GET /api/documents/{id}/processing_jobs/` conserva el historial autorizado. Reintentar genera otro trabajo; no borra el anterior. La carita minimalista de NORMAN acompaña estos estados; completar procesamiento no certifica cumplimiento.
 
-Rutas principales ya implementadas en `Next.js`:
+El checklist ofrece búsqueda, filtros y diez resultados por página; abrir un requisito muestra sus formularios y estado de procesamiento. Revisiones presenta todas las citas y evaluaciones desplegables. Evidencias permite descargar el soporte antes de decidir y conserva las rechazadas con sus notas. Las revisiones manuales se solicitan con `POST /api/document-reviews/enqueue/` y continúan en el worker aunque se abandone la pantalla.
 
-- `/`
-- `/companies`
-- `/projects`
-- `/projects/{id}`
-- `/projects/{id}/checklist`
-- `/projects/{id}/documents`
-- `/projects/{id}/reviews`
-- `/projects/{id}/action-plans`
-- `/projects/{id}/tracking`
-- `/projects/{id}/evidence`
-- `/projects/{id}/report`
-
-Capacidades cubiertas:
-
-1. dashboard portfolio con progreso documental vs implementacion real
-2. alta de empresas y proyectos
-3. detalle de proyecto con subnavegacion operativa
-4. checklist por proceso y requisito
-5. carga documental conectada al backend
-6. ejecucion de revisiones IA desde la UI
-7. gestion de pendientes y planes de accion
-8. seguimiento operativo del implementador por proyecto y plan
-9. registro y validacion de evidencia
-10. reporte ejecutivo por proyecto
-
-El frontend usa `NEXT_PUBLIC_API_BASE_URL` y server actions para mutaciones, evitando depender del navegador para llamadas cross-origin directas al backend.
-
-## Fase 7 - QA, Hardening y Piloto
-
-Capacidades nuevas:
-
-- `GET /api/projects/{id}/progress_report/` para reporte backend reutilizable
-- `GET /api/health/` con chequeos de base de datos, `MEDIA_ROOT` y proveedor IA configurado
-- comando `py backend/manage.py seed_demo_workspace --force-reset` para crear un dataset piloto reproducible
-
-Archivos operativos:
-
-- [backend/apps/reviews/report_generator.py](<C:/Users/fbravo/Desktop/Normador/backend/apps/reviews/report_generator.py>)
-- [backend/apps/implementation/management/commands/seed_demo_workspace.py](<C:/Users/fbravo/Desktop/Normador/backend/apps/implementation/management/commands/seed_demo_workspace.py>)
-- [docs/runbooks/pilot-demo.md](<C:/Users/fbravo/Desktop/Normador/docs/runbooks/pilot-demo.md>)
-- [docs/checklists/pilot-validation.md](<C:/Users/fbravo/Desktop/Normador/docs/checklists/pilot-validation.md>)
-
-El dataset demo deja el proyecto piloto con tres escenarios visibles:
-
-1. un requisito `CERRADO`
-2. un requisito `VALIDADO_DOCUMENTALMENTE`
-3. un requisito `OBSERVADO`
-
-Eso permite demostrar la diferencia entre soporte documental, evidencia real y brecha abierta sin depender de datos manuales improvisados.
+La base local fue transferida a PostgreSQL y comparada íntegramente: 270 objetos, incluidos 2 usuarios, 1 empresa, 1 proyecto y 1 documento. SQLite, media y respaldos se conservaron. El stack técnico está validado; falta el piloto final y la revisión visual de escritorio/móvil: ver TASKS.md.

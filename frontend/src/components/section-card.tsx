@@ -22,7 +22,7 @@ export function SectionCard({
             {title}
           </h2>
           {description ? (
-            <p className="mt-1.5 text-sm leading-6 text-ink/68">{description}</p>
+            <p className="mt-1.5 text-sm leading-6 text-ink/70">{description}</p>
           ) : null}
         </div>
         {action ? <div className="md:min-w-[240px]">{action}</div> : null}

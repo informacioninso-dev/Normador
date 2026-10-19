@@ -1,3 +1,5 @@
+> Documento historico: consultar README.md, SPEC.md, ARCHITECTURE.md y TASKS.md en la raiz para instrucciones vigentes. No ejecutar comandos de instalacion o reinicio de este documento sobre datos existentes.
+
 # Plan de Implementacion - AudiBot ISO
 
 ## 1. Objetivo
@@ -414,4 +416,3 @@ El MVP se considera exitoso si puede completar este escenario de punta a punta:
 ## 12. Recomendacion operativa
 
 La implementacion debe comenzar por backend y reglas de negocio, no por interfaz. Si el dominio y los estados quedan bien definidos desde el inicio, el frontend se vuelve una capa de operacion. Si se empieza por UI sin cerrar semantica de requisitos, estados y evidencia, el sistema se vuelve ambiguo y dificil de auditar.
-

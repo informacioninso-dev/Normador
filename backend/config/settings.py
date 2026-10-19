@@ -65,6 +65,7 @@ if module_available("rest_framework"):
     THIRD_PARTY_APPS.append("rest_framework")
 if module_available("rest_framework_simplejwt"):
     THIRD_PARTY_APPS.append("rest_framework_simplejwt")
+    THIRD_PARTY_APPS.append("rest_framework_simplejwt.token_blacklist")
 if module_available("corsheaders"):
     THIRD_PARTY_APPS.append("corsheaders")
 
@@ -116,6 +117,20 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DB_ENGINE = env("DB_ENGINE", default="sqlite", cast=str).lower()
 
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://localhost:16379/0")
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_TASK_ALWAYS_EAGER = env("CELERY_TASK_ALWAYS_EAGER", default=DB_ENGINE == "sqlite", cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_DEFAULT_QUEUE = env("CELERY_TASK_DEFAULT_QUEUE", default="norman_documents")
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_RESULT_EXPIRES = 86400
+
 if DB_ENGINE == "postgres":
     DATABASES = {
         "default": {
@@ -162,7 +177,7 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(env("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 
 CSRF_TRUSTED_ORIGINS = csv_env("CSRF_TRUSTED_ORIGINS")
 CORS_ALLOWED_ORIGINS = csv_env("CORS_ALLOWED_ORIGINS")
@@ -175,7 +190,7 @@ OLLAMA_EMBEDDING_MODEL = env(
     default="nomic-embed-text",
     cast=str,
 )
-AI_REQUEST_TIMEOUT_SECONDS = env("AI_REQUEST_TIMEOUT_SECONDS", default=60, cast=int)
+AI_REQUEST_TIMEOUT_SECONDS = env("AI_REQUEST_TIMEOUT_SECONDS", default=180, cast=int)
 CHUNK_SIZE_WORDS = env("CHUNK_SIZE_WORDS", default=1000, cast=int)
 CHUNK_OVERLAP_WORDS = env("CHUNK_OVERLAP_WORDS", default=150, cast=int)
 SEMANTIC_SEARCH_TOP_K = env("SEMANTIC_SEARCH_TOP_K", default=5, cast=int)
@@ -196,9 +211,9 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    "ROTATE_REFRESH_TOKENS": True,
+    "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",

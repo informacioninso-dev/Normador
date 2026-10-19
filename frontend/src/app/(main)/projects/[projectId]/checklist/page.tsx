@@ -1,7 +1,11 @@
+import { RoleForm } from "@/components/role-form";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ProcessingRefresh } from "@/components/processing-refresh";
 
 import {
   createEvidenceAction,
+  confirmNotApplicableAction,
   regenerateChecklistFromLibraryAction,
   runReviewAction,
   uploadDocumentAction,
@@ -84,11 +88,29 @@ export default async function ProjectChecklistPage({
 
   if (!Number.isFinite(projectId)) notFound();
 
-  const workspace = await getProjectWorkspace(projectId);
+  const workspace = await getProjectWorkspace(projectId, ["checklistItems","requirements","documents","evidences","actionPlans","reviews"]);
   if (!workspace.project) notFound();
 
-  const returnPath = `/projects/${projectId}/checklist`;
-  const groupedAreas = groupChecklistByArea(workspace.checklistItems);
+  const basePath = `/projects/${projectId}/checklist`;
+  const pick = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  const search = pick(query.q).trim();
+  const status = pick(query.status);
+  const processArea = pick(query.area);
+  const filtered = workspace.checklistItems.filter((item) =>
+    (!status || item.status === status) && (!processArea || item.process_area === processArea)
+    && (!search || `${item.clause} ${item.title} ${item.implementation_task}`.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
+  const page = Math.min(pageCount, Math.max(1, Math.floor(Number(pick(query.page))) || 1));
+  const selected = workspace.checklistItems.find((item) => item.id === Number(pick(query.item)));
+  function href(changes: Record<string, string | number | undefined> = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries({ q: search, status, area: processArea, page, item: selected?.id, ...changes })) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return `${basePath}?${params.toString()}`;
+  }
+  const returnPath = href();
+  const groupedAreas = groupChecklistByArea(selected ? [selected] : []);
   const reqById = Object.fromEntries(workspace.requirements.map((requirement) => [requirement.id, requirement]));
 
   const total = workspace.checklistItems.length;
@@ -114,12 +136,11 @@ export default async function ProjectChecklistPage({
               Checklist operativo
             </p>
             <p className="mt-1 text-sm leading-6 text-ink/70">
-              El checklist define cosas que deben implementarse, no solo documentos. Cuando
-              un item requiere politica, manual, POE o registro, subelo desde el item y ejecuta
-              revision AI contra norma, RAG y contexto.
+              Busca un requisito y abre su detalle para cargar documentos y revisar lo que falta.
+              NORMAN compara el soporte documental; la evidencia real de implementación se valida por separado.
             </p>
           </div>
-          <form action={regenerateChecklistFromLibraryAction} className="md:min-w-[260px]">
+          <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={regenerateChecklistFromLibraryAction} className="md:min-w-[260px]">
             <input type="hidden" name="return_path" value={returnPath} />
             <input type="hidden" name="project_id" value={projectId} />
             <SubmitButton
@@ -127,14 +148,27 @@ export default async function ProjectChecklistPage({
               pendingLabel="Actualizando..."
               className="w-full"
             />
-          </form>
+          </RoleForm>
         </div>
       </section>
+
+      <SectionCard title="Localizar un requisito" description="Filtra el checklist y abre un requisito para trabajar sus documentos, revisión y evidencias.">
+        <form method="get" action={basePath} className="grid gap-3 md:grid-cols-4">
+          <div><label htmlFor="checklist-search">Buscar por cláusula o título</label><input id="checklist-search" name="q" defaultValue={search} type="search" /></div>
+          <div><label htmlFor="checklist-status">Estado</label><select id="checklist-status" name="status" defaultValue={status}><option value="">Todos</option>{[...new Set(workspace.checklistItems.map((item) => item.status))].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></div>
+          <div><label htmlFor="checklist-area">Proceso</label><select id="checklist-area" name="area" defaultValue={processArea}><option value="">Todos</option>{[...new Set(workspace.checklistItems.map((item) => item.process_area))].map((value) => <option key={value} value={value}>{value || "Sin proceso"}</option>)}</select></div>
+          <div className="flex items-end gap-3"><SubmitButton label="Filtrar" /><Link className="py-3 underline" href={basePath}>Limpiar</Link></div>
+        </form>
+        <p className="my-4 text-sm" role="status">{filtered.length} requisitos · Página {page} de {pageCount}</p>
+        <ul className="divide-y divide-black/10">{filtered.slice((page - 1) * 10, page * 10).map((item) => <li key={item.id}><Link href={`${href({ item: item.id })}#requirement-${item.id}`} aria-current={selected?.id === item.id ? "true" : undefined} className="flex flex-wrap items-center justify-between gap-3 py-4"><span><strong>{item.clause} · {item.title}</strong><span className="mt-1 block text-sm text-moss">{item.process_area}</span></span><StatusBadge value={item.status} /></Link></li>)}</ul>
+        {!filtered.length && <p className="py-4">No hay coincidencias. Prueba otro término o limpia los filtros.</p>}
+        <nav aria-label="Páginas del checklist" className="mt-4 flex justify-between gap-4">{page > 1 ? <Link className="py-3 underline" href={href({ page: page - 1, item: undefined })}>Anterior</Link> : <span />}{page < pageCount && <Link className="py-3 underline" href={href({ page: page + 1, item: undefined })}>Siguiente</Link>}</nav>
+      </SectionCard>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map((item) => (
           <div key={item.label} className="ui-card rounded-[18px] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{item.label}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{item.label}</p>
             <p className="mt-2 text-2xl font-bold text-ink">{item.value}</p>
           </div>
         ))}
@@ -175,9 +209,12 @@ export default async function ProjectChecklistPage({
                       (evaluation) => evaluation.requirement === item.requirement,
                     ),
                   );
+                  const latestEvaluation = latestReview?.requirement_evaluations.find((evaluation) => evaluation.requirement === item.requirement);
 
                   return (
-                    <article key={item.id} className="ui-card rounded-[24px] p-4 md:p-5">
+                    <article id={`requirement-${item.id}`} key={item.id} className="ui-card scroll-mt-24 rounded-[24px] p-4 md:p-5">
+                      <div className="mb-4 flex flex-wrap gap-4"><Link href={href({ item: undefined })} className="underline">Cerrar detalle</Link><Link href={`/projects/${projectId}/reviews?requirement=${item.requirement}`} className="underline">Ver revisiones y citas</Link><Link href={`/projects/${projectId}/evidence?requirement=${item.requirement}`} className="underline">Ver evidencias</Link></div>
+                      {itemDocs.filter((document) => document.latest_job).map((document) => <div key={document.id} className="mb-4 rounded-xl bg-sand p-3"><p role="status">{document.title}: {({ PENDING: "En cola", RUNNING: "Procesando", RETRY: "Reintentando", SUCCESS: "Completado", FAILED: "Fallido" })[document.latest_job!.status]} {document.latest_job?.error}</p><Link className="underline" href={`/projects/${projectId}/documents#document-${document.id}`}>Ver documento y procesamiento</Link><ProcessingRefresh active={["PENDING", "RUNNING", "RETRY"].includes(document.latest_job!.status)} /></div>)}
                       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -206,7 +243,7 @@ export default async function ProjectChecklistPage({
                             {item.title}
                           </h3>
 
-                          <p className="mt-3 text-sm leading-6 text-ink/72">
+                          <p className="mt-3 text-sm leading-6 text-ink/70">
                             {item.implementation_task || item.description}
                           </p>
 
@@ -230,15 +267,15 @@ export default async function ProjectChecklistPage({
                             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                               <div>
                                 <p className="text-lg font-bold text-ink">{itemDocs.length}</p>
-                                <p className="text-[11px] text-ink/50">Docs</p>
+                                <p className="text-[11px] text-ink/70">Docs</p>
                               </div>
                               <div>
                                 <p className="text-lg font-bold text-ink">{itemEvidences.length}</p>
-                                <p className="text-[11px] text-ink/50">Evid.</p>
+                                <p className="text-[11px] text-ink/70">Evid.</p>
                               </div>
                               <div>
                                 <p className="text-lg font-bold text-ink">{openPlans.length}</p>
-                                <p className="text-[11px] text-ink/50">Pend.</p>
+                                <p className="text-[11px] text-ink/70">Pend.</p>
                               </div>
                             </div>
                           </div>
@@ -254,6 +291,16 @@ export default async function ProjectChecklistPage({
                               </div>
                             </div>
                           ) : null}
+                          {latestEvaluation?.status === "NO_APLICA" && !item.is_not_applicable && (
+                            <RoleForm allowed={Boolean(workspace.project?.can_validate)} action={confirmNotApplicableAction} className="space-y-3">
+                              <input type="hidden" name="return_path" value={`/projects/${projectId}/checklist`} />
+                              <input type="hidden" name="checklist_item" value={item.id} />
+                              <label htmlFor={`exclusion-${item.id}`} className="block text-sm font-semibold">Justificación de no aplicabilidad</label>
+                              <textarea id={`exclusion-${item.id}`} name="justification" required />
+                              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="confirmed" required className="h-4 w-4" />Confirmo la revisión humana del alcance.</label>
+                              <SubmitButton label="Aprobar no aplicabilidad" pendingLabel="Guardando..." />
+                            </RoleForm>
+                          )}
                         </div>
                       </div>
 
@@ -264,7 +311,7 @@ export default async function ProjectChecklistPage({
                           </p>
                           <ul className="mt-3 space-y-2">
                             {firstItems(item.acceptance_criteria).map((criterion) => (
-                              <li key={criterion} className="flex gap-2 text-sm leading-6 text-ink/72">
+                              <li key={criterion} className="flex gap-2 text-sm leading-6 text-ink/70">
                                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-signal" />
                                 <span>{criterion}</span>
                               </li>
@@ -278,30 +325,30 @@ export default async function ProjectChecklistPage({
                           </p>
                           {item.requires_document ? (
                             <>
-                              <form action={uploadDocumentAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                              <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={uploadDocumentAction} className="mt-3 space-y-2" encType="multipart/form-data">
                                 <input type="hidden" name="return_path" value={returnPath} />
                                 <input type="hidden" name="project" value={projectId} />
                                 <input type="hidden" name="requirement" value={item.requirement} />
                                 <input type="hidden" name="checklist_item" value={item.id} />
                                 <input type="hidden" name="auto_review" value="1" />
-                                <input name="title" placeholder="Politica, manual, POE o registro" />
-                                <select name="document_type" defaultValue={item.required_document_type || "OTRO"}>
+                                <input aria-label="Título" name="title" placeholder="Politica, manual, POE o registro" />
+                                <select aria-label="Tipo de documento" name="document_type" defaultValue={item.required_document_type || "OTRO"}>
                                   {DOCUMENT_TYPES.map((type) => (
                                     <option key={type} value={type}>
                                       {type}
                                     </option>
                                   ))}
                                 </select>
-                                <input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required />
+                                <input aria-label="Archivo de soporte" type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required />
                                 <SubmitButton label="Subir y comparar" pendingLabel="Procesando..." className="w-full" />
-                              </form>
+                              </RoleForm>
 
                               {readyDocs.length ? (
-                                <form action={runReviewAction} className="mt-3 space-y-2">
+                                <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={runReviewAction} className="mt-3 space-y-2">
                                   <input type="hidden" name="return_path" value={returnPath} />
                                   <input type="hidden" name="review_type" value="CUMPLIMIENTO_NORMATIVO" />
                                   <input type="hidden" name="requirement" value={item.requirement} />
-                                  <select name="document" defaultValue={readyDocs[0].id}>
+                                  <select aria-label="Documento para revisar" name="document" defaultValue={readyDocs[0].id}>
                                     {readyDocs.map((document) => (
                                       <option key={document.id} value={document.id}>
                                         Revisar: {document.title}
@@ -309,15 +356,15 @@ export default async function ProjectChecklistPage({
                                     ))}
                                   </select>
                                   <SubmitButton label="Comparar con AI" pendingLabel="Revisando..." className="w-full" />
-                                </form>
+                                </RoleForm>
                               ) : (
-                                <p className="mt-3 text-sm leading-6 text-ink/60">
+                                <p className="mt-3 text-sm leading-6 text-ink/70">
                                   Sube un documento para habilitar la comparacion con AI.
                                 </p>
                               )}
                             </>
                           ) : (
-                            <p className="mt-3 text-sm leading-6 text-ink/60">
+                            <p className="mt-3 text-sm leading-6 text-ink/70">
                               Este item no exige documento formal; puede cerrarse con actividad o evidencia.
                             </p>
                           )}
@@ -328,24 +375,24 @@ export default async function ProjectChecklistPage({
                             Evidencia operativa
                           </p>
                           {item.requires_evidence ? (
-                            <form action={createEvidenceAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                            <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={createEvidenceAction} className="mt-3 space-y-2" encType="multipart/form-data">
                               <input type="hidden" name="return_path" value={returnPath} />
                               <input type="hidden" name="project" value={projectId} />
                               <input type="hidden" name="requirement" value={item.requirement} />
                               <input type="hidden" name="checklist_item" value={item.id} />
-                              <input name="title" placeholder="Registro, foto, acta o soporte" required />
-                              <select name="evidence_type" defaultValue={item.required_evidence_type || "OTRO"}>
+                              <input aria-label="Título" name="title" placeholder="Registro, foto, acta o soporte" required />
+                              <select aria-label="Tipo de evidencia" name="evidence_type" defaultValue={item.required_evidence_type || "OTRO"}>
                                 {EVIDENCE_TYPES.map((type) => (
                                   <option key={type} value={type}>
                                     {type}
                                   </option>
                                 ))}
                               </select>
-                              <input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt,.jpg,.jpeg,.png" />
+                              <input aria-label="Archivo de soporte" type="file" name="file" accept=".pdf,.docx,.xlsx,.txt,.jpg,.jpeg,.png" />
                               <SubmitButton label="Subir evidencia" pendingLabel="Guardando..." className="w-full" />
-                            </form>
+                            </RoleForm>
                           ) : (
-                            <p className="mt-3 text-sm leading-6 text-ink/60">
+                            <p className="mt-3 text-sm leading-6 text-ink/70">
                               No requiere evidencia operativa adicional segun el criterio actual.
                             </p>
                           )}
@@ -356,7 +403,7 @@ export default async function ProjectChecklistPage({
                         <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                           Criterio AI y preguntas de verificacion
                         </summary>
-                        <p className="mt-3 text-sm leading-6 text-ink/72">
+                        <p className="mt-3 text-sm leading-6 text-ink/70">
                           {item.ai_review_focus || requirement?.requirement_text}
                         </p>
                         <ul className="mt-3 space-y-2">
@@ -375,14 +422,14 @@ export default async function ProjectChecklistPage({
             </SectionCard>
           );
         })
-      ) : (
+      ) : total === 0 ? (
         <SectionCard title="Checklist operativo">
           <EmptyState
             title="No hay items en checklist"
             description="Actualiza desde biblioteca o verifica que el proyecto tenga una norma asociada."
           />
         </SectionCard>
-      )}
+      ) : null}
     </div>
   );
 }

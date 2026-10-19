@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework import status
@@ -24,6 +25,8 @@ from apps.standards.models import Standard, StandardRequirement
 class DocumentUploadTests(APITestCase):
     def setUp(self):
         super().setUp()
+        self.user = get_user_model().objects.create_user(username="document-owner", password="test-password-123")
+        self.client.force_authenticate(self.user)
         temp_root = Path(settings.BASE_DIR) / "test-media"
         temp_root.mkdir(parents=True, exist_ok=True)
         self.temp_media = temp_root / f"media-{uuid4().hex}"
@@ -37,6 +40,7 @@ class DocumentUploadTests(APITestCase):
             name="Doc Company",
             ruc="0999999999010",
             industry="Calidad",
+            created_by=self.user,
         )
         self.standard = Standard.objects.create(
             code="ISO_9001_TEST",
@@ -155,11 +159,9 @@ class DocumentUploadTests(APITestCase):
         index_response = self.client.post(f"/api/documents/{document_id}/index_chunks/", {})
 
         self.assertEqual(index_response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(index_response.data["created_chunks"], 2)
-        self.assertEqual(
-            index_response.data["embedded_chunks"],
-            index_response.data["created_chunks"],
-        )
+        self.assertGreaterEqual(index_response.data["embedded_chunks"], 2)
+        self.assertEqual(index_response.data["created_chunks"], 0)
+        self.assertEqual(index_response.data["job"]["status"], "SUCCESS")
 
         chunks = DocumentChunk.objects.filter(document_id=document_id).order_by("chunk_index")
         self.assertTrue(chunks.exists())
@@ -182,3 +184,40 @@ class DocumentUploadTests(APITestCase):
         self.assertGreaterEqual(search_response.data["count"], 1)
         top_result = search_response.data["results"][0]
         self.assertIn("recepcion", top_result["content"].lower())
+
+    def test_upload_extracts_real_docx_xlsx_and_pdf_files(self):
+        from io import BytesIO
+        from docx import Document as WordDocument
+        from openpyxl import Workbook
+        from pypdf import PdfWriter
+        from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
+        word = WordDocument()
+        word.add_paragraph("Registro de recepcion DOCX")
+        table = word.add_table(rows=1, cols=1)
+        table.cell(0, 0).text = "Lote ABC"
+        word_bytes = BytesIO()
+        word.save(word_bytes)
+        workbook = Workbook()
+        workbook.active.append(["Registro XLSX", "Lote ABC"])
+        sheet_bytes = BytesIO()
+        workbook.save(sheet_bytes)
+        workbook.close()
+        pdf = PdfWriter()
+        page = pdf.add_blank_page(width=612, height=792)
+        font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+        page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})})
+        stream = DecodedStreamObject()
+        stream.set_data(b"BT /F1 12 Tf 72 720 Td (Registro PDF Lote ABC) Tj ET")
+        page[NameObject("/Contents")] = pdf._add_object(stream)
+        pdf_bytes = BytesIO()
+        pdf.write(pdf_bytes)
+        for extension, data in (("docx", word_bytes.getvalue()), ("xlsx", sheet_bytes.getvalue()), ("pdf", pdf_bytes.getvalue())):
+            with self.subTest(extension=extension):
+                response = self.client.post("/api/documents/", {
+                    "project": self.project.pk, "document_type": "REGISTRO",
+                    "file": SimpleUploadedFile(f"registro.{extension}", data),
+                }, format="multipart")
+                self.assertEqual(response.status_code, 201, response.data)
+                self.assertEqual(response.data["status"], "LISTO", response.data)
+                self.assertIn("Lote ABC", response.data["extracted_text"])
+                self.assertEqual(response.data["extracted_metadata"]["source_type"], extension)

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.common.choices import (
+    AIProvider,
     FindingStatus,
     FindingType,
     RequirementEvaluationStatus,
@@ -49,6 +50,7 @@ class DocumentReview(TimeStampedModel):
     raw_response = models.JSONField(default=dict, blank=True)
     retrieved_context = models.JSONField(default=dict, blank=True)
     ai_model_used = models.CharField(max_length=255, blank=True)
+    provider = models.CharField(max_length=32, choices=AIProvider.choices, blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

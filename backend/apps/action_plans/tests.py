@@ -54,6 +54,7 @@ class ActionPlanAndEvidenceApiTests(APITestCase):
 
         self.company = Company.objects.create(
             name="Phase 5 Company",
+            created_by=self.user,
             ruc="0999999999030",
             industry="Dispositivos",
         )
@@ -263,6 +264,7 @@ class ActionPlanSupersedeTests(APITestCase):
 
         self.company = Company.objects.create(
             name="Supersede Company",
+            created_by=self.user,
             ruc="0999999999040",
             industry="Calidad",
         )

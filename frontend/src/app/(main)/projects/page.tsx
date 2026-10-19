@@ -1,3 +1,5 @@
+import { FormField } from "@/components/form-field";
+import { ActionForm } from "@/components/action-form";
 import Link from "next/link";
 
 import { createProjectAction, deleteProjectAction } from "@/app/actions";
@@ -84,15 +86,15 @@ function ProjectCard({
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/45">Doc</p>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/70">Doc</p>
           <p className="mt-1 font-semibold text-ink">{metrics.documentaryProgress}%</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/45">Impl</p>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/70">Impl</p>
           <p className="mt-1 font-semibold text-ink">{metrics.implementationProgress}%</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/45">Pend</p>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-ink/70">Pend</p>
           <p className="mt-1 font-semibold text-ink">{metrics.openActionPlans}</p>
         </div>
       </div>
@@ -104,18 +106,18 @@ function ProjectCard({
         >
           Abrir
         </Link>
-        <p className="text-xs text-ink/48">Meta {formatDate(project.target_date)}</p>
+        <p className="text-xs text-ink/70">Meta {formatDate(project.target_date)}</p>
       </div>
 
       {canDelete ? (
-        <form action={deleteProjectAction} className="mt-3">
+        <ActionForm action={deleteProjectAction} className="mt-3">
           <input type="hidden" name="project_id" value={project.id} />
           <input type="hidden" name="return_path" value="/projects" />
           <DeleteButton
-            label="Eliminar"
-            confirmMessage={`Eliminar "${project.name}"? Se borraran sus documentos, revisiones y planes. Esta accion no se puede deshacer.`}
+            label="Archivar"
+            confirmMessage={`¿Archivar "${project.name}"? Sus documentos, revisiones y planes se conservarán.`}
           />
-        </form>
+        </ActionForm>
       ) : null}
     </article>
   );
@@ -179,7 +181,7 @@ function CompanyBoard({
                   />
                 ))
               ) : (
-                <div className="rounded-[18px] border border-dashed border-signal/18 bg-white/86 p-4 text-sm text-ink/60">
+                <div className="rounded-[18px] border border-dashed border-signal/18 bg-white/86 p-4 text-sm text-ink/70">
                   Sin proyectos.
                 </div>
               )}
@@ -214,7 +216,7 @@ function StatusBoard({
           >
             <div className="flex items-center justify-between gap-3">
               <StatusBadge value={status} />
-              <span className="text-sm font-semibold text-ink/60">{statusProjects.length}</span>
+              <span className="text-sm font-semibold text-ink/70">{statusProjects.length}</span>
             </div>
             <div className="mt-4 space-y-3">
               {statusProjects.length ? (
@@ -228,7 +230,7 @@ function StatusBoard({
                   />
                 ))
               ) : (
-                <div className="rounded-[18px] border border-dashed border-signal/18 bg-white/86 p-4 text-sm text-ink/60">
+                <div className="rounded-[18px] border border-dashed border-signal/18 bg-white/86 p-4 text-sm text-ink/70">
                   Sin proyectos.
                 </div>
               )}
@@ -281,7 +283,7 @@ function ProjectTable({
               <p className="font-semibold text-ink">{project.name}</p>
               <p className="mt-1 text-sm text-ink/58">{project.standard_name}</p>
             </div>
-            <p className="text-sm text-ink/72">{project.company_name}</p>
+            <p className="text-sm text-ink/70">{project.company_name}</p>
             <StatusBadge value={project.status} className="w-fit" />
             <p className="text-sm font-semibold text-ink">{metrics.documentaryProgress}%</p>
             <p className="text-sm font-semibold text-ink">{metrics.implementationProgress}%</p>
@@ -303,16 +305,15 @@ function CreateProjectForm({
   defaultCompany?: string;
 }) {
   return (
-    <form action={createProjectAction} className="grid gap-4 lg:grid-cols-2">
+    <ActionForm action={createProjectAction} className="grid gap-4 lg:grid-cols-2">
       <input type="hidden" name="return_path" value="/projects?view=nuevo" />
       <input type="hidden" name="success_return_path" value="/projects" />
       <input type="hidden" name="status" value="PLANNING" />
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Empresa existente
-        </label>
-        <select name="company" defaultValue={defaultCompany ?? ""}>
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="company" defaultValue={defaultCompany ?? ""}>
           <option value="">
             {companies.length ? "Selecciona una empresa" : "No hay empresas cargadas"}
           </option>
@@ -321,14 +322,13 @@ function CreateProjectForm({
               {company.name}
             </option>
           ))}
-        </select>
+        </select></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Norma
-        </label>
-        <select name="standard" required defaultValue="">
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="standard" required defaultValue="">
           <option value="" disabled>
             Selecciona una norma
           </option>
@@ -337,62 +337,55 @@ function CreateProjectForm({
               {standard.name}
             </option>
           ))}
-        </select>
+        </select></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Empresa nueva
-        </label>
-        <input name="company_name" placeholder="Laboratorio Andino" />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_name" placeholder="Laboratorio Andino" /></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           RUC
-        </label>
-        <input name="company_ruc" placeholder="0999999999001" />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_ruc" placeholder="0999999999001" /></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Industria
-        </label>
-        <input name="company_industry" placeholder="Opcional" />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_industry" placeholder="Opcional" /></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Nombre
-        </label>
-        <input name="name" placeholder="Implementacion ISO 13485 - Planta Norte" required />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="name" placeholder="Implementacion ISO 13485 - Planta Norte" required /></FormField>
       </div>
 
       <div className="lg:col-span-2">
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Alcance
-        </label>
-        <textarea name="scope" placeholder="Procesos, sedes o areas incluidas." required />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><textarea name="scope" placeholder="Procesos, sedes o areas incluidas." required /></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Inicio
-        </label>
-        <input type="date" name="start_date" />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="start_date" /></FormField>
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+        <FormField label={<>
           Meta
-        </label>
-        <input type="date" name="target_date" />
+        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="target_date" /></FormField>
       </div>
 
       <div className="lg:col-span-2">
         <SubmitButton label="Crear proyecto" pendingLabel="Creando..." className="w-full" />
       </div>
-    </form>
+    </ActionForm>
   );
 }
 

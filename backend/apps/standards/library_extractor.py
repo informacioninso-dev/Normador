@@ -127,6 +127,9 @@ def _matching_reference_documents(standard: Standard):
         is_reference=True,
         status=DocumentProcessingStatus.READY,
         library_standard=standard,
+        project__isnull=True,
+        library_company__isnull=True,
+        library_project__isnull=True,
     ).exclude(extracted_text="")
     explicit_documents = [
         document
@@ -140,6 +143,9 @@ def _matching_reference_documents(standard: Standard):
         is_reference=True,
         status=DocumentProcessingStatus.READY,
         library_standard__isnull=True,
+        project__isnull=True,
+        library_company__isnull=True,
+        library_project__isnull=True,
     ).exclude(extracted_text="")
     ready_documents = [
         document

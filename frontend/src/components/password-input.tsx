@@ -6,10 +6,16 @@ export function PasswordInput({
   name,
   placeholder,
   autoComplete,
+  id,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: {
   name: string;
   placeholder?: string;
   autoComplete?: string;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -17,6 +23,9 @@ export function PasswordInput({
     <div className="relative">
       <input
         name={name}
+        id={id}
+        aria-describedby={describedBy}
+        aria-invalid={invalid}
         type={visible ? "text" : "password"}
         placeholder={placeholder}
         required
@@ -26,8 +35,8 @@ export function PasswordInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute inset-y-0 right-3 flex items-center text-ink/40 hover:text-ink/70 transition"
-        tabIndex={-1}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-ink transition"
+        aria-pressed={visible}
         aria-label={visible ? "Ocultar contraseña" : "Ver contraseña"}
       >
         {visible ? (

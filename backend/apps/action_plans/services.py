@@ -261,6 +261,13 @@ def _validate_action_plan_can_close(action_plan: ActionPlan) -> None:
         if action_plan.requirement_id
         else latest_evaluation.requires_real_evidence
     ) or latest_evaluation.requires_real_evidence
+    if latest_evaluation.status == RequirementEvaluationStatus.NOT_APPLICABLE:
+        item = resolve_project_checklist_item(action_plan.project, action_plan.requirement_id)
+        if not (item and item.not_applicable_approved_by_id and item.not_applicable_approved_at
+                and item.not_applicable_review_id == latest_evaluation.document_review_id
+                and item.not_applicable_justification.strip()):
+            raise ValueError("NO_APLICA requiere justificacion y aprobacion humana antes del cierre.")
+        requires_real_evidence = False
     if requires_real_evidence:
         validated_evidence_exists = Evidence.objects.filter(
             project_id=action_plan.project_id,

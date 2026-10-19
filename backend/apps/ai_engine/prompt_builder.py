@@ -177,8 +177,9 @@ def build_document_review_prompt(
 ) -> PromptBundle:
     template = get_active_review_template()
     system_prompt = template.system_prompt if template else DEFAULT_REVIEW_SYSTEM_PROMPT
-    prompt_version = template.version if template else "builtin-document-review-v1"
-    response_schema = template.response_schema if template and template.response_schema else REVIEW_OUTPUT_SCHEMA
+    prompt_version = f"{template.version}+strict-v2" if template else "builtin-document-review-v2"
+    system_prompt += "\nReglas obligatorias del contrato v2: evalua todos los IDs seleccionados una sola vez. evidence_found debe ser una cita literal breve del contexto del documento del cliente, sin comentarios ni identificadores añadidos. No cites la biblioteca como evidencia de implementacion. Devuelve booleanos JSON verdaderos, no cadenas."
+    response_schema = REVIEW_OUTPUT_SCHEMA
 
     requirement_payload = []
     for requirement in requirements:

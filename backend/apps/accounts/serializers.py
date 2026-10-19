@@ -1,6 +1,8 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 
 class LoginSerializer(serializers.Serializer):
@@ -45,6 +47,13 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+    def validate(self, attrs):
+        try:
+            validate_password(attrs["password"], User(**{k: v for k, v in attrs.items() if k != "password"}))
+        except ValidationError as exc:
+            raise serializers.ValidationError({"password": exc.messages}) from exc
+        return attrs
+
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=True)
@@ -61,3 +70,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and request.user.pk == self.instance.pk and (
+            attrs.get("is_staff") is False or attrs.get("is_active") is False
+        ):
+            raise serializers.ValidationError("No puedes desactivar tu propia cuenta administradora.")
+        if attrs.get("password"):
+            try:
+                validate_password(attrs["password"], self.instance)
+            except ValidationError as exc:
+                raise serializers.ValidationError({"password": exc.messages}) from exc
+        return attrs

@@ -44,7 +44,7 @@ def _retire_revision(controlled, revision, user, action, notes):
 
 
 def _locked_document(controlled, expected_version):
-    controlled = ControlledDocument.objects.select_for_update().select_related(
+    controlled = ControlledDocument.objects.select_for_update(of=("self",)).select_related(
         "project__company", "project__standard", "requirement"
     ).get(pk=controlled.pk)
     if controlled.archived_at:
@@ -150,8 +150,9 @@ def transition_document(controlled, *, user, expected_version, action, notes="",
             raise ValueError("Solo un documento en revision puede devolverse a borrador.")
         revision.status = DocumentRevisionStatus.DRAFT
     elif action == "approve":
-        if not user.is_staff:
-            raise PermissionError("La aprobacion requiere un usuario administrador.")
+        from apps.companies.access import can_access_company, VALIDATE_ROLES
+        if not can_access_company(user, controlled.project.company_id, VALIDATE_ROLES):
+            raise PermissionError("La aprobacion requiere responsable o auditor de la empresa.")
         if revision.status != DocumentRevisionStatus.IN_REVIEW:
             raise ValueError("La version debe estar en revision antes de aprobarla.")
         if not confirmed or not notes.strip():

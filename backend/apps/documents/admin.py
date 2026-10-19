@@ -1,10 +1,13 @@
 from django.contrib import admin
+from apps.common.admin import BusinessRecordAdmin
 
-from apps.documents.models import Document, DocumentChunk
+from apps.documents.models import Document, DocumentChunk, DocumentProcessingJob
+
+admin.site.register(DocumentProcessingJob, BusinessRecordAdmin)
 
 
 @admin.register(Document)
-class DocumentAdmin(admin.ModelAdmin):
+class DocumentAdmin(BusinessRecordAdmin):
     list_display = (
         "title",
         "project",
@@ -18,7 +21,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
 
 @admin.register(DocumentChunk)
-class DocumentChunkAdmin(admin.ModelAdmin):
+class DocumentChunkAdmin(BusinessRecordAdmin):
     list_display = (
         "document",
         "chunk_index",

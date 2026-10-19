@@ -2,37 +2,98 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useId, useRef } from "react";
 
 const projectTabs = [
-  { href: "", label: "Implementacion" },
+  { href: "", label: "Implementación" },
+  { href: "/checklist", label: "Checklist" },
+  { href: "/documents", label: "Documentos" },
+  { href: "/reviews", label: "Revisiones" },
+  { href: "/action-plans", label: "Planes de acción" },
+  { href: "/evidence", label: "Evidencias" },
   { href: "/document-control", label: "Control documental" },
   { href: "/daily-log", label: "Registro diario" },
+  { href: "/tracking", label: "Seguimiento" },
+  { href: "/report", label: "Informe" },
 ];
 
 export function ProjectTabs({ projectId }: { projectId: number }) {
   const pathname = usePathname();
+  const disclosureRef = useRef<HTMLDetailsElement>(null);
+  const panelId = useId();
+  const basePath = `/projects/${projectId}`;
+  const isActive = (suffix: string) =>
+    pathname === `${basePath}${suffix}` ||
+    (suffix !== "" && pathname.startsWith(`${basePath}${suffix}/`));
+  const currentSection = projectTabs.find((tab) => isActive(tab.href));
+
+  useEffect(() => {
+    if (disclosureRef.current) disclosureRef.current.open = false;
+  }, [pathname]);
 
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-      {projectTabs.map((tab) => {
-        const href = `/projects/${projectId}${tab.href}`;
-        const active = pathname === href || (tab.href !== "" && pathname.startsWith(`${href}/`));
-
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={[
-              "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition",
-              active
-                ? "ui-pill-active"
-                : "ui-pill text-ink/70 hover:bg-[#edf3ff] hover:text-ink",
-            ].join(" ")}
+    <nav aria-label="Secciones del proyecto" className="pb-3">
+      <details
+        ref={disclosureRef}
+        className="group"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && event.currentTarget.open) {
+            event.preventDefault();
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector("summary")?.focus();
+          }
+        }}
+      >
+        <summary
+          aria-controls={panelId}
+          className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3 hover:bg-[#edf3ff] [&::-webkit-details-marker]:hidden"
+        >
+          <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="text-ink/70">Secciones del proyecto</span>
+            <span className="font-semibold text-ink">{currentSection?.label ?? "Seleccionar sección"}</span>
+          </span>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-5 w-5 shrink-0 text-ink/70 transition-transform group-open:rotate-180 motion-reduce:transition-none"
           >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </div>
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div id={panelId} className="grid gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+          {projectTabs.map((tab) => {
+            const href = `${basePath}${tab.href}`;
+            const active = isActive(tab.href);
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                onClick={() => {
+                  if (disclosureRef.current) {
+                    disclosureRef.current.open = false;
+                    disclosureRef.current.querySelector("summary")?.focus();
+                  }
+                }}
+                className={[
+                  "inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "ui-pill-active"
+                    : "ui-pill text-ink/70 hover:bg-[#edf3ff] hover:text-ink",
+                ].join(" ")}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </div>
+      </details>
+    </nav>
   );
 }

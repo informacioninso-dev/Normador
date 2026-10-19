@@ -11,8 +11,8 @@ const config: Config = {
       colors: {
         ink: "#1b2554",
         sand: "#f4f7ff",
-        signal: "#4f7ed9",
-        moss: "#6b7fb0",
+        signal: "#315fb0",
+        moss: "#435b88",
       },
     },
   },

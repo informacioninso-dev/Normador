@@ -51,12 +51,23 @@ export interface ControlledDocument {
 }
 
 export interface Company {
+  is_active: boolean;
+  my_role: "ADMINISTRADOR" | "RESPONSABLE" | "IMPLEMENTADOR" | "AUDITOR" | "LECTOR";
   id: number;
   name: string;
   ruc: string;
   industry: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CompanyMembership {
+  id: number;
+  company: number;
+  company_name: string;
+  username: string;
+  role: "RESPONSABLE" | "IMPLEMENTADOR" | "AUDITOR" | "LECTOR";
+  is_active: boolean;
 }
 
 export interface Standard {
@@ -92,6 +103,8 @@ export interface StandardRequirement {
 }
 
 export interface Project {
+  can_edit: boolean;
+  can_validate: boolean;
   id: number;
   company: number;
   company_name: string;
@@ -139,6 +152,14 @@ export interface ChecklistItem {
 }
 
 export interface DocumentRecord {
+  latest_job: {
+    operation: string;
+    review_after_processing: boolean;
+    id: number;
+    status: "PENDING" | "RUNNING" | "RETRY" | "SUCCESS" | "FAILED";
+    attempts: number;
+    error: string;
+  } | null;
   id: number;
   project: number | null;
   project_name: string;
@@ -164,8 +185,8 @@ export interface DocumentRecord {
   status: string;
   uploaded_by: number | null;
   uploaded_at: string;
-  extracted_text: string;
-  extracted_metadata: Record<string, unknown>;
+  extracted_text?: string;
+  extracted_metadata?: Record<string, unknown>;
   chunk_count: number;
   processing_error: string;
   created_at: string;
@@ -209,6 +230,7 @@ export interface Finding {
 }
 
 export interface DocumentReview {
+  provider: string;
   id: number;
   document: number;
   document_title: string;
@@ -221,10 +243,10 @@ export interface DocumentReview {
   risk_level: string;
   summary: string;
   prompt_version: string;
-  system_prompt_used: string;
-  user_prompt_used: string;
-  raw_response: Record<string, unknown>;
-  retrieved_context: Record<string, unknown>;
+  system_prompt_used?: string;
+  user_prompt_used?: string;
+  raw_response?: Record<string, unknown>;
+  retrieved_context?: Record<string, unknown>;
   ai_model_used: string;
   created_by: number | null;
   requirement_evaluations: RequirementEvaluation[];

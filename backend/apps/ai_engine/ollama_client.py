@@ -45,6 +45,8 @@ class OllamaClient:
             raise OllamaAPIError(f"Ollama HTTP {exc.code}: {body}") from exc
         except urllib.error.URLError as exc:
             raise OllamaAPIError(f"Ollama connection error: {exc.reason}") from exc
+        except (TimeoutError, OSError) as exc:
+            raise OllamaAPIError("Ollama no respondio dentro del tiempo configurado o se interrumpio la conexion.") from exc
 
         try:
             data = json.loads(raw_body)
@@ -94,6 +96,8 @@ class OllamaClient:
             raise OllamaAPIError(f"Ollama HTTP {exc.code}: {body}") from exc
         except urllib.error.URLError as exc:
             raise OllamaAPIError(f"Ollama connection error: {exc.reason}") from exc
+        except (TimeoutError, OSError) as exc:
+            raise OllamaAPIError("Ollama no respondio dentro del tiempo configurado o se interrumpio la conexion.") from exc
 
         try:
             data = json.loads(raw_body)

@@ -1,12 +1,15 @@
+import { FormField } from "@/components/form-field";
+import { ActionForm } from "@/components/action-form";
 import Link from "next/link";
 
 import { createCompanyAction, deleteCompanyAction } from "@/app/actions";
 import { DeleteButton } from "@/components/delete-button";
+import { CompanyAccess } from "@/components/company-access";
 import { EmptyState } from "@/components/empty-state";
 import { FlashBanner } from "@/components/flash-banner";
 import { SectionCard } from "@/components/section-card";
 import { SubmitButton } from "@/components/submit-button";
-import { decodeFlash, getCompaniesData, getCurrentUser } from "@/lib/api";
+import { decodeFlash, getCompaniesData } from "@/lib/api";
 import { formatDate, pluralize } from "@/lib/presentation";
 
 export default async function CompaniesPage({
@@ -16,7 +19,7 @@ export default async function CompaniesPage({
 }) {
   const query = await searchParams;
   const flash = decodeFlash(query);
-  const [data, user] = await Promise.all([getCompaniesData(), getCurrentUser()]);
+  const data = await getCompaniesData();
 
   return (
     <div className="space-y-6">
@@ -27,28 +30,25 @@ export default async function CompaniesPage({
         description="Registro administrativo. Tambien puedes crear una empresa al dar de alta un proyecto."
       >
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <form action={createCompanyAction} className="space-y-3">
+          <ActionForm action={createCompanyAction} className="space-y-3">
             <input type="hidden" name="return_path" value="/companies" />
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Nombre
-              </label>
-              <input name="name" placeholder="Laboratorio Andino" required />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="name" placeholder="Laboratorio Andino" required /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 RUC
-              </label>
-              <input name="ruc" placeholder="0999999999001" required />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="ruc" placeholder="0999999999001" required /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Industria
-              </label>
-              <input name="industry" placeholder="Opcional" />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="industry" placeholder="Opcional" /></FormField>
             </div>
             <SubmitButton label="Guardar empresa" pendingLabel="Guardando..." className="w-full" />
-          </form>
+          </ActionForm>
 
           <div className="rounded-[24px] border border-black/8 bg-sand/72 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
@@ -60,7 +60,7 @@ export default async function CompaniesPage({
             >
               Proyectos
             </h3>
-            <p className="mt-3 text-sm leading-6 text-ink/72">
+            <p className="mt-3 text-sm leading-6 text-ink/70">
               Si lo que quieres es operar, entra a proyectos. Desde ahi ya puedes crear la
               empresa y abrir el checklist.
             </p>
@@ -94,13 +94,14 @@ export default async function CompaniesPage({
                   >
                     {company.name}
                   </h3>
+                  <p className="mt-2 text-sm text-ink/80">Tu rol: {company.my_role.toLowerCase()} · {company.is_active ? "Empresa activa" : "Empresa archivada"}</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink/45">RUC</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink/70">RUC</p>
                       <p className="mt-1 text-sm font-semibold text-ink">{company.ruc}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink/45">
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink/70">
                         Proyectos
                       </p>
                       <p className="mt-1 text-sm font-semibold text-ink">
@@ -108,22 +109,22 @@ export default async function CompaniesPage({
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Alta</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Alta</p>
                       <p className="mt-1 text-sm font-semibold text-ink">
                         {formatDate(company.created_at)}
                       </p>
                     </div>
                   </div>
 
-                  {user?.is_staff && (
-                    <form action={deleteCompanyAction} className="mt-4">
+                  {["ADMINISTRADOR", "RESPONSABLE"].includes(company.my_role) && company.is_active && (
+                    <ActionForm action={deleteCompanyAction} className="mt-4">
                       <input type="hidden" name="company_id" value={company.id} />
                       <input type="hidden" name="return_path" value="/companies" />
                       <DeleteButton
-                        label="Eliminar empresa"
-                        confirmMessage={`Eliminar "${company.name}"? Esta accion borrara sus proyectos y no se puede deshacer.`}
+                        label="Archivar empresa"
+                        confirmMessage={`¿Archivar "${company.name}"? Sus proyectos y documentos se conservarán.`}
                       />
-                    </form>
+                    </ActionForm>
                   )}
                 </article>
               );
@@ -136,6 +137,7 @@ export default async function CompaniesPage({
           />
         )}
       </SectionCard>
+      <CompanyAccess companies={data.companies} memberships={data.memberships} />
     </div>
   );
 }

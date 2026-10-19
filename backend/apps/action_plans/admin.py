@@ -1,10 +1,11 @@
 from django.contrib import admin
+from apps.common.admin import BusinessRecordAdmin
 
 from apps.action_plans.models import ActionPlan, Evidence, ImplementationActivity
 
 
 @admin.register(ActionPlan)
-class ActionPlanAdmin(admin.ModelAdmin):
+class ActionPlanAdmin(BusinessRecordAdmin):
     list_display = (
         "id",
         "project",
@@ -21,7 +22,7 @@ class ActionPlanAdmin(admin.ModelAdmin):
 
 
 @admin.register(Evidence)
-class EvidenceAdmin(admin.ModelAdmin):
+class EvidenceAdmin(BusinessRecordAdmin):
     list_display = (
         "id",
         "project",
@@ -46,7 +47,7 @@ class EvidenceAdmin(admin.ModelAdmin):
 
 
 @admin.register(ImplementationActivity)
-class ImplementationActivityAdmin(admin.ModelAdmin):
+class ImplementationActivityAdmin(BusinessRecordAdmin):
     list_display = (
         "id",
         "project",

@@ -1,10 +1,11 @@
 from django.contrib import admin
+from apps.common.admin import BusinessRecordAdmin
 
 from apps.reviews.models import DocumentReview, Finding, RequirementEvaluation
 
 
 @admin.register(DocumentReview)
-class DocumentReviewAdmin(admin.ModelAdmin):
+class DocumentReviewAdmin(BusinessRecordAdmin):
     list_display = (
         "id",
         "document",
@@ -19,7 +20,7 @@ class DocumentReviewAdmin(admin.ModelAdmin):
 
 
 @admin.register(RequirementEvaluation)
-class RequirementEvaluationAdmin(admin.ModelAdmin):
+class RequirementEvaluationAdmin(BusinessRecordAdmin):
     list_display = (
         "document_review",
         "requirement",
@@ -32,7 +33,7 @@ class RequirementEvaluationAdmin(admin.ModelAdmin):
 
 
 @admin.register(Finding)
-class FindingAdmin(admin.ModelAdmin):
+class FindingAdmin(BusinessRecordAdmin):
     list_display = (
         "id",
         "project",

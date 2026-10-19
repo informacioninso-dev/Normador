@@ -1,3 +1,4 @@
+from apps.companies.api_access import CompanyRelationsMixin
 import re
 
 from rest_framework import serializers
@@ -70,7 +71,7 @@ class ControlledDocumentSerializer(serializers.ModelSerializer):
         ]
 
 
-class ControlledDocumentCreateSerializer(serializers.Serializer):
+class ControlledDocumentCreateSerializer(CompanyRelationsMixin, serializers.Serializer):
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.select_related("company", "standard"))
     code = serializers.CharField(max_length=64)
     title = serializers.CharField(max_length=255)
@@ -92,8 +93,6 @@ class ControlledDocumentCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         project, user = attrs["project"], self.context["request"].user
-        if not user.is_staff and project.company.created_by_id != user.id:
-            raise serializers.ValidationError({"project": "No tienes acceso a este proyecto."})
         requirement, item = attrs.get("requirement"), attrs.get("checklist_item")
         if requirement and requirement.standard_id != project.standard_id:
             raise serializers.ValidationError({"requirement": "El requisito no pertenece a la norma del proyecto."})

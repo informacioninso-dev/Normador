@@ -47,7 +47,7 @@ export function ShellNav({
               stacked ? "w-full" : "",
               active
                 ? "bg-signal text-white shadow-[0_16px_32px_rgba(79,126,217,0.28)]"
-                : "ui-pill text-ink/72 hover:bg-[#edf3ff] hover:text-ink",
+                : "ui-pill text-ink/70 hover:bg-[#edf3ff] hover:text-ink",
             ].join(" ")}
           >
             {link.label}

@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/action-form";
 import type { Metadata } from "next";
 
 import { EmptyState } from "@/components/empty-state";
@@ -9,7 +10,7 @@ import { decodeFlash, getLibraryData } from "@/lib/api";
 import { formatDate } from "@/lib/presentation";
 import { deleteReferenceDocumentAction, uploadReferenceDocumentAction } from "./actions";
 
-export const metadata: Metadata = { title: "Biblioteca - Normador" };
+export const metadata: Metadata = { title: "Biblioteca - NORMAN AI" };
 
 const documentTypes = [
   ["POLITICA", "Politica"],
@@ -57,7 +58,7 @@ function LibraryUploadForm({
   const isStandard = mode === "standard";
 
   return (
-    <form action={uploadReferenceDocumentAction} className="ui-panel rounded-[22px] p-4">
+    <ActionForm action={uploadReferenceDocumentAction} className="ui-panel rounded-[22px] p-4">
       <input type="hidden" name="library_kind" value={isStandard ? "NORMA" : "CONTEXTO_EMPRESA"} />
       <input type="hidden" name="library_usages" value="REVISION_DOCUMENTOS" />
       <input type="hidden" name="library_usages" value="CONTEXTO_RAG" />
@@ -73,10 +74,10 @@ function LibraryUploadForm({
       </div>
 
       <div className="grid gap-3">
-        <input name="title" placeholder="Titulo opcional" />
+        <input aria-label="Título" name="title" placeholder="Titulo opcional" />
 
         {isStandard ? (
-          <select name="library_standard" required defaultValue="">
+          <select aria-label="Norma de referencia" name="library_standard" required defaultValue="">
             <option value="" disabled>
               Selecciona norma
             </option>
@@ -87,7 +88,7 @@ function LibraryUploadForm({
             ))}
           </select>
         ) : (
-          <select name="library_company" required defaultValue="">
+          <select aria-label="Empresa de referencia" name="library_company" required defaultValue="">
             <option value="" disabled>
               Selecciona empresa
             </option>
@@ -100,7 +101,7 @@ function LibraryUploadForm({
         )}
 
         {!isStandard ? (
-          <select name="library_project" defaultValue="">
+          <select aria-label="Proyecto de referencia" name="library_project" defaultValue="">
             <option value="">Proyecto opcional</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -110,7 +111,7 @@ function LibraryUploadForm({
           </select>
         ) : null}
 
-        <select name="process_area" defaultValue="">
+        <select aria-label="Proceso" name="process_area" defaultValue="">
           <option value="">Proceso opcional</option>
           {processAreas.map((area) => (
             <option key={area} value={area}>
@@ -119,7 +120,7 @@ function LibraryUploadForm({
           ))}
         </select>
 
-        <select name="document_type" defaultValue={isStandard ? "OTRO" : "INFORME"}>
+        <select aria-label="Tipo de documento" name="document_type" defaultValue={isStandard ? "OTRO" : "INFORME"}>
           {documentTypes.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -127,7 +128,7 @@ function LibraryUploadForm({
           ))}
         </select>
 
-        <input
+        <input aria-label="Archivo de soporte"
           name="file"
           type="file"
           accept=".pdf,.docx,.txt,.xlsx"
@@ -141,7 +142,7 @@ function LibraryUploadForm({
           className="w-full"
         />
       </div>
-    </form>
+    </ActionForm>
   );
 }
 
@@ -223,7 +224,7 @@ function DocumentList({
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="ui-muted rounded-[14px] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Vinculo</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Vinculo</p>
               <p className="mt-1 truncate font-semibold text-ink">
                 {document.library_standard_name ||
                   document.library_company_name ||
@@ -232,14 +233,14 @@ function DocumentList({
               </p>
             </div>
             <div className="ui-muted rounded-[14px] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Fragmentos</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Fragmentos</p>
               <p className="mt-1 font-semibold text-ink">{document.chunk_count}</p>
             </div>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-ink/50">{formatDate(document.uploaded_at)}</p>
-            <form action={deleteReferenceDocumentAction}>
+            <p className="text-xs text-ink/70">{formatDate(document.uploaded_at)}</p>
+            <ActionForm action={deleteReferenceDocumentAction}>
               <input type="hidden" name="document_id" value={document.id} />
               <button
                 type="submit"
@@ -247,7 +248,7 @@ function DocumentList({
               >
                 Eliminar
               </button>
-            </form>
+            </ActionForm>
           </div>
         </article>
       ))}

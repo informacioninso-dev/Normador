@@ -32,7 +32,7 @@ def generate_checklist_for_project(
 
     requirements = project.standard.requirements.all().order_by("sequence", "clause", "id")
     if overwrite:
-        project.checklist_items.all().delete()
+        raise ValueError("No se puede sobrescribir el historial del checklist. Regenera de forma incremental.")
 
     created = 0
     existing_requirement_ids = set(
@@ -335,14 +335,7 @@ def recalculate_checklist_item_state(
     next_progress = checklist_item.progress_percentage
     next_is_not_applicable = False
 
-    if checklist_item.is_not_applicable and (
-        latest_evaluation is None
-        or latest_evaluation.status == RequirementEvaluationStatus.NOT_APPLICABLE
-    ):
-        next_status = ChecklistStatus.CLOSED
-        next_progress = CHECKLIST_PROGRESS_BY_STATUS[ChecklistStatus.CLOSED]
-        next_is_not_applicable = True
-    elif latest_evaluation is None:
+    if latest_evaluation is None:
         next_status = ChecklistStatus.IN_REVIEW if has_ready_documents else ChecklistStatus.NOT_STARTED
     else:
         evaluation_status = latest_evaluation.status
@@ -351,8 +344,14 @@ def recalculate_checklist_item_state(
         elif evaluation_status == RequirementEvaluationStatus.PARTIAL:
             next_status = ChecklistStatus.PARTIAL
         elif evaluation_status == RequirementEvaluationStatus.NOT_APPLICABLE:
-            next_status = ChecklistStatus.CLOSED
-            next_is_not_applicable = True
+            human_approved = bool(
+                checklist_item.not_applicable_approved_by_id
+                and checklist_item.not_applicable_approved_at
+                and checklist_item.not_applicable_review_id == latest_evaluation.document_review_id
+                and checklist_item.not_applicable_justification.strip()
+            )
+            next_status = ChecklistStatus.CLOSED if human_approved and not open_action_plans_exist else ChecklistStatus.OBSERVED
+            next_is_not_applicable = human_approved
         elif evaluation_status == RequirementEvaluationStatus.COMPLIES:
             requires_real_evidence = (
                 checklist_item.requirement.requires_real_evidence

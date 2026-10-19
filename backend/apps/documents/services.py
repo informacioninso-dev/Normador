@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 from django.conf import settings
+from django.db import transaction
 
 from apps.ai_engine.chunker import chunk_text
 from apps.ai_engine.embeddings import embed_document_chunks
@@ -75,9 +76,6 @@ def index_document_chunks(
     if not document.extracted_text.strip():
         raise ValueError("Document does not contain extracted text to chunk.")
 
-    if overwrite:
-        document.chunks.all().delete()
-
     payloads = chunk_text(
         document.extracted_text,
         chunk_size=chunk_size or settings.CHUNK_SIZE_WORDS,
@@ -97,8 +95,18 @@ def index_document_chunks(
         )
         for payload in payloads
     ]
-    if chunks:
-        DocumentChunk.objects.bulk_create(chunks)
+    existing = list(document.chunks.order_by("chunk_index").values_list("chunk_index", "content_hash"))
+    expected = [(chunk.chunk_index, chunk.content_hash) for chunk in chunks]
+    if not overwrite and existing and existing == expected:
+        return {
+            "created_chunks": 0,
+            "embedded_chunks": embed_document_chunks(document, provider=provider, created_by=created_by),
+        }
+    with transaction.atomic():
+        Document.objects.select_for_update().get(pk=document.pk)
+        document.chunks.all().delete()
+        if chunks:
+            DocumentChunk.objects.bulk_create(chunks)
 
     created_chunks = len(chunks)
     embedded_chunks = embed_document_chunks(document, provider=provider, created_by=created_by)

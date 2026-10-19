@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.common.admin import BusinessRecordAdmin
 
 from apps.ai_engine.models import AIProviderLog, PromptTemplate
 
@@ -11,7 +12,7 @@ class PromptTemplateAdmin(admin.ModelAdmin):
 
 
 @admin.register(AIProviderLog)
-class AIProviderLogAdmin(admin.ModelAdmin):
+class AIProviderLogAdmin(BusinessRecordAdmin):
     list_display = ("provider", "model_name", "operation_type", "status", "latency_ms", "created_at")
     list_filter = ("provider", "operation_type", "status")
     search_fields = ("model_name", "prompt_version", "error_message")

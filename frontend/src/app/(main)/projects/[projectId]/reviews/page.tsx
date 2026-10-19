@@ -1,4 +1,8 @@
+import { FormField } from "@/components/form-field";
+import { RoleForm } from "@/components/role-form";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ProcessingRefresh } from "@/components/processing-refresh";
 
 import { runReviewAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
@@ -7,7 +11,7 @@ import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { decodeFlash, getProjectWorkspace } from "@/lib/api";
-import { excerpt, formatDateTime } from "@/lib/presentation";
+import { formatDateTime } from "@/lib/presentation";
 
 const reviewTypes = [
   "REVISION_DOCUMENTAL",
@@ -33,7 +37,7 @@ export default async function ProjectReviewsPage({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId);
+  const workspace = await getProjectWorkspace(projectId, ["documents","reviews","checklistItems"]);
 
   if (!workspace.project) {
     notFound();
@@ -48,15 +52,14 @@ export default async function ProjectReviewsPage({
 
       <SectionCard
         title="Revision documental y normativa"
-        description="Selecciona un documento listo y ejecuta la orquestacion completa: retrieval, prompt estructurado, evaluaciones, hallazgos y actualizacion de checklist."
+        description="Selecciona un documento para comprobar sus requisitos. NORMAN guardará las citas, los faltantes y los hallazgos; podrás consultar el estado sin esperar en esta pantalla."
         action={
-          <form action={runReviewAction} className="space-y-3">
+          <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={runReviewAction} className="space-y-3">
             <input type="hidden" name="return_path" value={returnPath} />
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Documento listo
-              </label>
-              <select name="document" required defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="document" required defaultValue="">
                 <option value="" disabled>
                   Selecciona documento
                 </option>
@@ -65,37 +68,39 @@ export default async function ProjectReviewsPage({
                     {document.title}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Tipo de revision
-              </label>
-              <select name="review_type" defaultValue="CUMPLIMIENTO_NORMATIVO">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="review_type" defaultValue="CUMPLIMIENTO_NORMATIVO">
                 {reviewTypes.map((value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {value.replaceAll("_", " ")}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
             <SubmitButton label="Ejecutar revision" pendingLabel="Revisando..." className="w-full" />
-          </form>
+          </RoleForm>
         }
       >
         <div className="space-y-4">
+          {workspace.documents.filter((document) => document.latest_job?.operation === "REVIEW" || document.latest_job?.review_after_processing).map((document) => <div key={document.id} className="rounded-xl border border-black/15 p-4"><p role="status">{document.title} · {({ PENDING: "En cola", RUNNING: "Revisando", RETRY: "Reintentando", SUCCESS: "Revisión completada", FAILED: "No se completó la revisión" })[document.latest_job!.status]}</p>{document.latest_job?.error && <p role="alert">{document.latest_job.error}</p>}<ProcessingRefresh active={["PENDING", "RUNNING", "RETRY"].includes(document.latest_job!.status)} /></div>)}
           {workspace.reviews.map((review) => (
             <article
               key={review.id}
+              id={`review-${review.id}`}
               className="rounded-[28px] border border-black/8 bg-white/78 p-5"
             >
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="max-w-3xl">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                    {review.review_type} · {review.ai_model_used || "mock"}
+                    {review.review_type.replaceAll("_", " ")} · {review.provider || "Proveedor no registrado"} · {review.ai_model_used || "Modelo no registrado"} · {review.prompt_version}
                   </p>
                   <h3 className="mt-2 text-xl font-semibold text-ink">{review.document_title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-ink/72">{review.summary}</p>
+                  <p className="mt-3 text-sm leading-6 text-ink/70">{review.summary}</p>
+                  <a className="mt-3 inline-flex min-h-11 items-center underline" href={`/api/files/documents/${review.document}`} target="_blank" rel="noopener noreferrer">Abrir documento revisado (nueva pestaña)</a>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge value={review.overall_status} />
@@ -105,19 +110,19 @@ export default async function ProjectReviewsPage({
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Fecha</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Fecha</p>
                   <p className="mt-1 text-sm font-semibold text-ink">
                     {formatDateTime(review.created_at)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Evaluaciones</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Evaluaciones</p>
                   <p className="mt-1 text-sm font-semibold text-ink">
                     {review.requirement_evaluations.length}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Hallazgos</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Hallazgos</p>
                   <p className="mt-1 text-sm font-semibold text-ink">{review.findings.length}</p>
                 </div>
               </div>
@@ -128,20 +133,30 @@ export default async function ProjectReviewsPage({
                     Evaluaciones
                   </p>
                   <div className="mt-3 space-y-3">
-                    {review.requirement_evaluations.slice(0, 3).map((evaluation) => (
-                      <div key={evaluation.id} className="rounded-[18px] bg-white/75 p-3">
+                    {review.requirement_evaluations.map((evaluation) => (
+                      <details key={evaluation.id} className="rounded-xl border border-black/15 bg-white p-3" open={review.requirement_evaluations.length === 1}>
+                        <summary className="cursor-pointer py-2 font-semibold">{evaluation.clause} · {evaluation.requirement_title} · {evaluation.status.replaceAll("_", " ")}</summary>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-ink">
                               {evaluation.clause} · {evaluation.requirement_title}
                             </p>
-                            <p className="mt-2 text-sm leading-6 text-ink/72">
-                              {excerpt(evaluation.recommendation || evaluation.gap)}
+                            <p className="mt-2 text-sm leading-6 text-ink/70">
+                              {evaluation.recommendation || evaluation.gap}
                             </p>
                           </div>
                           <StatusBadge value={evaluation.status} />
                         </div>
-                      </div>
+                        <div className="mt-4 space-y-3 break-words">
+                          <div><h4 className="font-semibold">Evidencia citada en el documento</h4>{evaluation.evidence_found ? <blockquote className="mt-2 whitespace-pre-wrap rounded-xl bg-sand p-3">{evaluation.evidence_found}</blockquote> : <p>No se identificó una cita documental para esta evaluación.</p>}</div>
+                          <p className="whitespace-pre-wrap"><strong>Brecha:</strong> {evaluation.gap || "Sin brecha indicada."}</p>
+                          <p><strong>Riesgo:</strong> {evaluation.risk_level}</p>
+                          <p><strong>Evidencia real requerida:</strong> {evaluation.requires_real_evidence ? "Sí. La validación documental por sí sola no cierra el requisito." : "Según las condiciones de cierre del requisito."}</p>
+                          {evaluation.missing_documents_or_evidence.length > 0 && <div><h4 className="font-semibold">Documentos o evidencia que faltan</h4><ul className="list-disc pl-5">{evaluation.missing_documents_or_evidence.map((missing, index) => <li key={index}>{missing}</li>)}</ul></div>}
+                          {evaluation.suggested_text && <details><summary className="cursor-pointer py-2 underline">Texto sugerido para revisión humana</summary><p className="whitespace-pre-wrap">{evaluation.suggested_text}</p></details>}
+                          <Link href={`/projects/${projectId}/checklist?item=${workspace.checklistItems.find((item) => item.requirement === evaluation.requirement)?.id ?? ""}`} className="inline-flex min-h-11 items-center underline">Trabajar este requisito</Link>
+                        </div>
+                      </details>
                     ))}
                   </div>
                 </div>
@@ -159,8 +174,8 @@ export default async function ProjectReviewsPage({
                               <p className="text-sm font-semibold text-ink">
                                 {finding.requirement_title || finding.finding_type}
                               </p>
-                              <p className="mt-2 text-sm leading-6 text-ink/72">
-                                {excerpt(finding.description)}
+                              <p className="mt-2 text-sm leading-6 text-ink/70">
+                                {finding.description}
                               </p>
                             </div>
                             <StatusBadge value={finding.finding_type} />

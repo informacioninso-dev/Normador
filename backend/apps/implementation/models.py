@@ -103,6 +103,15 @@ class ImplementationChecklistItem(TimeStampedModel):
     due_date = models.DateField(null=True, blank=True)
     is_not_applicable = models.BooleanField(default=False)
     not_applicable_justification = models.TextField(blank=True)
+    not_applicable_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="approved_requirement_exclusions",
+    )
+    not_applicable_approved_at = models.DateTimeField(null=True, blank=True)
+    not_applicable_review = models.ForeignKey(
+        "reviews.DocumentReview", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="human_exclusions",
+    )
 
     class Meta:
         ordering = [

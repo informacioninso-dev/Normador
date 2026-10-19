@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from pgvector.django import VectorField
 
 from apps.common.choices import (
     AIProvider,
@@ -13,7 +14,6 @@ from apps.common.choices import (
     DocumentType,
     EmbeddingStatus,
     LibraryDocumentKind,
-    LibraryUsage,
 )
 from apps.common.models import TimeStampedModel
 
@@ -148,6 +148,7 @@ class DocumentChunk(TimeStampedModel):
     page_number = models.PositiveIntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     embedding = models.JSONField(default=list, blank=True)
+    embedding_vector = VectorField(null=True, blank=True)
     embedding_dimensions = models.PositiveIntegerField(default=0)
     embedding_provider = models.CharField(
         max_length=32,
@@ -164,6 +165,10 @@ class DocumentChunk(TimeStampedModel):
 
     class Meta:
         ordering = ["document_id", "chunk_index", "id"]
+        indexes = [models.Index(
+            fields=["embedding_provider", "embedding_model", "embedding_status", "embedding_dimensions"],
+            name="chunk_embedding_lookup",
+        )]
         constraints = [
             models.UniqueConstraint(
                 fields=["document", "chunk_index"],
@@ -173,6 +178,40 @@ class DocumentChunk(TimeStampedModel):
 
     def __str__(self):
         return f"{self.document_id}:{self.chunk_index}"
+
+
+class DocumentProcessingJob(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "En cola"
+        RUNNING = "RUNNING", "Procesando"
+        RETRY = "RETRY", "Reintentando"
+        SUCCESS = "SUCCESS", "Completado"
+        FAILED = "FAILED", "Fallido"
+
+    class Operation(models.TextChoices):
+        INGEST = "INGEST", "Extraer e indexar"
+        INDEX = "INDEX", "Reindexar"
+        REVIEW = "REVIEW", "Revisar documento"
+
+    document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="processing_jobs")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    operation = models.CharField(max_length=16, choices=Operation.choices)
+    review_after_processing = models.BooleanField(default=False)
+    review_options = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    task_id = models.CharField(max_length=64, unique=True)
+    attempts = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [models.UniqueConstraint(
+            fields=["document"], condition=models.Q(status__in=["PENDING", "RUNNING", "RETRY"]),
+            name="one_active_document_job",
+        )]
 
 
 class ControlledDocument(TimeStampedModel):

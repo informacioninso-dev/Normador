@@ -24,6 +24,7 @@ from apps.documents.models import Document
 from apps.implementation.models import Project
 from apps.reviews.models import DocumentReview
 from apps.standards.models import Standard, StandardRequirement
+from unittest.mock import patch
 
 
 @override_settings(
@@ -117,6 +118,10 @@ class DocumentReviewApiTests(APITestCase):
         )
 
         self.assertEqual(review_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(review_response.data["provider"], "mock")
+        provider_log = AIProviderLog.objects.get(operation_type="review", status="success")
+        self.assertEqual(provider_log.request_payload["review_id"], review_response.data["id"])
+        self.assertEqual(provider_log.created_by, self.user)
         self.assertEqual(
             review_response.data["overall_status"],
             RequirementEvaluationStatus.COMPLIES,
@@ -172,3 +177,71 @@ class DocumentReviewApiTests(APITestCase):
         )
 
         self.assertEqual(review_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+    def test_invalid_model_output_is_logged_without_persisting_review(self):
+        from apps.reviews.iso_reviewer import MockReviewProvider
+        from apps.action_plans.models import ActionPlan
+        from apps.reviews.models import RequirementEvaluation, Finding
+        upload = SimpleUploadedFile("test.txt", b"recepcion lote inspeccion registro", content_type="text/plain")
+        response = self.client.post("/api/documents/", {
+            "project": self.project.pk, "requirement": self.requirement.pk,
+            "document_type": "PROCEDIMIENTO", "file": upload,
+        }, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        for invalid in ({}, {"overall_status": "CUMPLE", "requirement_evaluations": []}):
+            with patch.object(MockReviewProvider, "run_review", return_value=(invalid, {})):
+                review = self.client.post("/api/document-reviews/", {
+                    "document": response.data["id"], "review_type": "REVISION_DOCUMENTAL",
+                }, format="json")
+            self.assertEqual(review.status_code, 502, review.data)
+        self.assertFalse(DocumentReview.objects.exists())
+        self.assertFalse(RequirementEvaluation.objects.exists())
+        self.assertFalse(Finding.objects.exists())
+        self.assertFalse(ActionPlan.objects.exists())
+        self.assertEqual(AIProviderLog.objects.filter(operation_type="review", status="error").count(), 2)
+
+    def test_contract_rejects_duplicate_missing_wrong_types_and_invented_citations(self):
+        from apps.reviews.iso_reviewer import MockReviewProvider
+        import copy
+        original = MockReviewProvider.run_review
+        response = self.client.post("/api/documents/", {
+            "project": self.project.pk, "requirement": self.requirement.pk,
+            "document_type": "PROCEDIMIENTO",
+            "file": SimpleUploadedFile("test.txt", b"recepcion lote inspeccion registro proveedor"),
+        }, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        for mutation in ("duplicate", "missing", "boolean", "citation", "foreign"):
+            def invalid(provider, context):
+                payload, metadata = original(provider, context)
+                evaluation = payload["requirement_evaluations"][0]
+                if mutation == "duplicate":
+                    payload["requirement_evaluations"].append(copy.deepcopy(evaluation))
+                elif mutation == "missing":
+                    payload["requirement_evaluations"] = []
+                elif mutation == "boolean":
+                    evaluation["can_close_requirement"] = "false"
+                elif mutation == "citation":
+                    evaluation["evidence_found"] = "EVIDENCIA QUE NO EXISTE EN EL DOCUMENTO"
+                else:
+                    evaluation["requirement_id"] = 999999
+                return payload, metadata
+            with self.subTest(mutation=mutation), patch.object(MockReviewProvider, "run_review", invalid):
+                result = self.client.post("/api/document-reviews/", {"document": response.data["id"], "review_type": "REVISION_DOCUMENTAL"}, format="json")
+                self.assertEqual(result.status_code, 502, result.data)
+        self.assertFalse(DocumentReview.objects.exists())
+
+    def test_provider_failure_keeps_auditable_error_without_a_review(self):
+        from apps.reviews.iso_reviewer import MockReviewProvider
+        from apps.ai_engine.ollama_client import OllamaAPIError
+        response = self.client.post("/api/documents/", {
+            "project": self.project.pk, "requirement": self.requirement.pk,
+            "document_type": "PROCEDIMIENTO", "file": SimpleUploadedFile("test.txt", b"recepcion registro"),
+        }, format="multipart")
+        with patch.object(MockReviewProvider, "run_review", side_effect=OllamaAPIError("Unavailable")):
+            result = self.client.post("/api/document-reviews/", {"document": response.data["id"], "review_type": "REVISION_DOCUMENTAL"}, format="json")
+        self.assertEqual(result.status_code, 502)
+        self.assertFalse(DocumentReview.objects.exists())
+        log = AIProviderLog.objects.get(operation_type="review", status="error")
+        self.assertEqual(log.created_by, self.user)
+        self.assertTrue(log.prompt_version)

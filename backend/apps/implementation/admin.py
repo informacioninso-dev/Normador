@@ -1,17 +1,18 @@
 from django.contrib import admin
+from apps.common.admin import BusinessRecordAdmin
 
 from apps.implementation.models import ImplementationChecklistItem, Project, WorkLogEntry
 
 
 @admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
+class ProjectAdmin(BusinessRecordAdmin):
     list_display = ("name", "company", "standard", "status", "start_date", "target_date")
     list_filter = ("status", "standard")
     search_fields = ("name", "company__name", "standard__name")
 
 
 @admin.register(ImplementationChecklistItem)
-class ImplementationChecklistItemAdmin(admin.ModelAdmin):
+class ImplementationChecklistItemAdmin(BusinessRecordAdmin):
     list_display = (
         "title",
         "project",
@@ -25,7 +26,7 @@ class ImplementationChecklistItemAdmin(admin.ModelAdmin):
 
 
 @admin.register(WorkLogEntry)
-class WorkLogEntryAdmin(admin.ModelAdmin):
+class WorkLogEntryAdmin(BusinessRecordAdmin):
     list_display = (
         "work_date",
         "project",

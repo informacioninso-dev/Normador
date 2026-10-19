@@ -7,21 +7,37 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-audibot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-audibot}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     container_name: audibot-redis
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-16379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   ollama:
+    profiles: ["bundled-ollama"]
     image: ollama/ollama:latest
     container_name: audibot-ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11435:11434"
     volumes:
       - ollama_data:/root/.ollama
 
@@ -30,17 +46,50 @@ services:
       context: .
       dockerfile: infra/docker/backend.Dockerfile
     container_name: audibot-backend
-    command: python manage.py runserver 0.0.0.0:8000
+    command: poetry run python manage.py runserver 0.0.0.0:8000
     env_file:
-      - backend/.env.example
+      - backend/.env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      OLLAMA_BASE_URL: ${OLLAMA_DOCKER_BASE_URL:-http://host.docker.internal:11434}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
     volumes:
       - ./backend:/app
+      - backend_venv:/app/.venv
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8011}:8000"
     depends_on:
-      - postgres
-      - redis
-      - ollama
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+    command: poetry run celery -A config worker --loglevel=INFO --concurrency=1
+    env_file:
+      - backend/.env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: ${OLLAMA_DOCKER_BASE_URL:-http://host.docker.internal:11434}
+      CELERY_TASK_ALWAYS_EAGER: "false"
+    volumes:
+      - ./backend:/app
+      - worker_venv:/app/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
@@ -50,14 +99,19 @@ services:
     command: npm run dev -- --hostname 0.0.0.0
     env_file:
       - frontend/.env.example
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-3001}:3000"
     depends_on:
       - backend
 
 volumes:
+  redis_data:
+  worker_venv:
+  backend_venv:
   postgres_data:
   ollama_data:

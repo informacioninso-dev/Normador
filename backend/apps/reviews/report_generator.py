@@ -23,9 +23,9 @@ def generate_project_progress_report(project) -> dict:
             "id",
         )
     )
-    documents = list(project.documents.order_by("-uploaded_at", "-id"))
+    documents = list(project.documents.defer("extracted_text", "extracted_metadata").order_by("-uploaded_at", "-id"))
     reviews = list(
-        project.document_reviews.select_related("document", "standard").order_by(
+        project.document_reviews.select_related("document", "standard").defer("system_prompt_used", "user_prompt_used", "raw_response", "retrieved_context", "document__extracted_text", "document__extracted_metadata").order_by(
             "-created_at",
             "-id",
         )
@@ -70,6 +70,7 @@ def generate_project_progress_report(project) -> dict:
             "target_date": project.target_date.isoformat() if project.target_date else None,
         },
         "summary": {
+            "has_simulated_reviews": any(review.provider == "mock" or review.ai_model_used.startswith("mock") for review in reviews),
             "total_requirements": len(checklist_items),
             "closed_requirements": sum(
                 1 for item in checklist_items if item.status == ChecklistStatus.CLOSED

@@ -1,3 +1,5 @@
+import { FormField } from "@/components/form-field";
+import { RoleForm } from "@/components/role-form";
 import { notFound } from "next/navigation";
 
 import { createActionPlanAction, transitionActionPlanAction } from "@/app/actions";
@@ -25,7 +27,7 @@ export default async function ProjectActionPlansPage({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId);
+  const workspace = await getProjectWorkspace(projectId, ["actionPlans","requirements"]);
 
   if (!workspace.project) {
     notFound();
@@ -47,42 +49,38 @@ export default async function ProjectActionPlansPage({
         title="Nuevo plan de accion"
         description="Registra un pendiente directamente si no fue generado automaticamente desde una revision."
         action={
-          <form action={createActionPlanAction} className="space-y-3">
+          <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={createActionPlanAction} className="space-y-3">
             <input type="hidden" name="return_path" value={returnPath} />
             <input type="hidden" name="project" value={projectId} />
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Requisito
-              </label>
-              <select name="requirement" defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="requirement" defaultValue="">
                 <option value="">Sin requisito especifico</option>
                 {workspace.requirements.map((req) => (
                   <option key={req.id} value={req.id}>
                     {req.clause} — {req.title}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Titulo
-              </label>
-              <input name="title" placeholder="Actualizar procedimiento de almacenamiento" required />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="title" placeholder="Actualizar procedimiento de almacenamiento" required /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Descripcion
-              </label>
-              <textarea name="description" placeholder="Detalle del pendiente..." />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><textarea name="description" placeholder="Detalle del pendiente..." /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Fecha objetivo
-              </label>
-              <input type="date" name="due_date" />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="due_date" /></FormField>
             </div>
             <SubmitButton label="Crear plan" pendingLabel="Guardando..." className="w-full" />
-          </form>
+          </RoleForm>
         }
       >
         <div className="space-y-3">
@@ -98,7 +96,7 @@ export default async function ProjectActionPlansPage({
                       {plan.clause || "Sin clausula"} · {plan.risk_level}
                     </p>
                     <h3 className="mt-2 text-xl font-semibold text-ink">{plan.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-ink/72">
+                    <p className="mt-2 text-sm leading-6 text-ink/70">
                       {plan.recommended_action || plan.description}
                     </p>
                   </div>
@@ -114,23 +112,23 @@ export default async function ProjectActionPlansPage({
 
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Evidencias</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Evidencias</p>
                     <p className="mt-1 text-sm font-semibold text-ink">
                       {plan.validated_evidence_count}/{plan.evidence_count}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Fecha objetivo</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Fecha objetivo</p>
                     <p className="mt-1 text-sm font-semibold text-ink">
                       {formatDate(plan.due_date)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Seguimiento</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Seguimiento</p>
                     <p className="mt-1 text-sm font-semibold text-ink">
                       {plan.activity_count} registros
                     </p>
-                    <p className="mt-1 text-xs text-ink/60">
+                    <p className="mt-1 text-xs text-ink/70">
                       Ultimo: {formatDate(plan.latest_activity_on)}
                     </p>
                   </div>
@@ -138,28 +136,28 @@ export default async function ProjectActionPlansPage({
 
                 <div className="mt-4 flex gap-2">
                   {plan.status === "PENDIENTE" && (
-                    <form action={transitionActionPlanAction}>
+                    <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
                       <input type="hidden" name="transition" value="start_progress" />
                       <SubmitButton label="Iniciar" pendingLabel="..." />
-                    </form>
+                    </RoleForm>
                   )}
                   {plan.status === "EN_PROGRESO" && (
-                    <form action={transitionActionPlanAction}>
+                    <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
                       <input type="hidden" name="transition" value="resolve" />
                       <SubmitButton label="Resolver" pendingLabel="..." />
-                    </form>
+                    </RoleForm>
                   )}
                   {plan.status === "RESUELTO" && (
-                    <form action={transitionActionPlanAction}>
+                    <RoleForm allowed={Boolean(workspace.project?.can_validate)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
                       <input type="hidden" name="transition" value="close_plan" />
                       <SubmitButton label="Cerrar" pendingLabel="..." />
-                    </form>
+                    </RoleForm>
                   )}
                 </div>
               </article>
@@ -181,7 +179,7 @@ export default async function ProjectActionPlansPage({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-ink">{plan.title}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/45">
+                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/70">
                       {plan.clause || "Sin clausula"}
                     </p>
                   </div>

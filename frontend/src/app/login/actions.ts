@@ -20,7 +20,7 @@ export async function loginAction(formData: FormData) {
   const rawPassword = formData.get("password") as string | null;
 
   if (!username || !rawPassword) {
-    redirect("/login?error=" + encodeURIComponent("Usuario y contraseña son obligatorios."));
+    return { error: "Usuario y contraseña son obligatorios.", fieldErrors: { username: !username ? "Escribe tu usuario." : "", password: !rawPassword ? "Escribe tu contraseña." : "" } };
   }
 
   let data: { access: string; refresh: string; user: { username: string } };
@@ -40,13 +40,13 @@ export async function loginAction(formData: FormData) {
           : typeof payload.non_field_errors === "object" && Array.isArray(payload.non_field_errors)
             ? payload.non_field_errors[0]
             : "Credenciales invalidas.";
-      redirect("/login?error=" + encodeURIComponent(String(detail)));
+      return { error: String(detail) };
     }
 
     data = await response.json();
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("NEXT_REDIRECT")) throw error;
-    redirect("/login?error=" + encodeURIComponent("No se pudo conectar con el servidor."));
+    return { error: "No se pudo conectar con el servidor. Conservamos los datos para que puedas reintentar." };
   }
 
   const store = await cookies();
@@ -64,6 +64,18 @@ export async function loginAction(formData: FormData) {
 
 export async function logoutAction() {
   const store = await cookies();
+  const refresh = store.get(REFRESH_TOKEN_COOKIE)?.value;
+  if (refresh) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/logout/`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!response.ok) throw new Error("No se pudo revocar la sesion.");
+    } catch {
+      redirect("/login?error=" + encodeURIComponent("No se pudo cerrar la sesion en el servidor. Reintenta cuando vuelva la conexion."));
+    }
+  }
   store.delete(ACCESS_TOKEN_COOKIE);
   store.delete(REFRESH_TOKEN_COOKIE);
   redirect("/login");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
+import { useActionForm } from "@/components/action-form";
 
 export function SubmitButton({
   label,
@@ -11,7 +12,9 @@ export function SubmitButton({
   pendingLabel?: string;
   className?: string;
 }) {
-  const { pending } = useFormStatus();
+  const native = useFormStatus();
+  const managed = useActionForm();
+  const pending = native.pending || managed.pending;
 
   return (
     <button

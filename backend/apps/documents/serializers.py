@@ -1,15 +1,31 @@
+from apps.companies.api_access import CompanyRelationsMixin, PrivateFileMixin
 from pathlib import Path
 
 from rest_framework import serializers
 
 from apps.common.choices import LibraryDocumentKind, LibraryUsage
-from apps.documents.models import Document, DocumentChunk
+from apps.documents.models import Document, DocumentChunk, DocumentProcessingJob
 
 SUPPORTED_DOCUMENT_EXTENSIONS = {".txt", ".docx", ".xlsx", ".pdf"}
 VALID_LIBRARY_USAGES = {choice.value for choice in LibraryUsage}
 
 
-class DocumentSerializer(serializers.ModelSerializer):
+class ProcessingJobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentProcessingJob
+        fields = ["id", "document", "operation", "review_after_processing", "status", "task_id", "attempts", "error", "result", "created_by", "created_at", "started_at", "finished_at"]
+        read_only_fields = fields
+
+
+class DocumentSerializer(PrivateFileMixin, serializers.ModelSerializer):
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        if request and request.query_params.get("summary") == "true":
+            for name in ("extracted_text", "extracted_metadata"):
+                fields.pop(name, None)
+        return fields
+
     project_name = serializers.CharField(source="project.name", read_only=True)
     library_standard_name = serializers.CharField(source="library_standard.name", read_only=True)
     library_company_name = serializers.CharField(source="library_company.name", read_only=True)
@@ -17,6 +33,11 @@ class DocumentSerializer(serializers.ModelSerializer):
     requirement_title = serializers.CharField(source="requirement.title", read_only=True)
     checklist_item_title = serializers.CharField(source="checklist_item.title", read_only=True)
     chunk_count = serializers.SerializerMethodField()
+    latest_job = serializers.SerializerMethodField()
+
+    def get_latest_job(self, obj):
+        job = obj.processing_jobs.first()
+        return ProcessingJobSerializer(job).data if job else None
 
     def get_chunk_count(self, obj):
         return getattr(obj, "chunk_count", obj.chunks.count())
@@ -52,6 +73,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "extracted_text",
             "extracted_metadata",
             "chunk_count",
+            "latest_job",
             "processing_error",
             "created_at",
             "updated_at",
@@ -78,7 +100,8 @@ class DocumentSerializer(serializers.ModelSerializer):
         ]
 
 
-class DocumentWriteSerializer(serializers.ModelSerializer):
+class DocumentWriteSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
+    auto_review = serializers.BooleanField(required=False, write_only=True, default=False)
     title = serializers.CharField(required=False, allow_blank=True)
     library_usages = serializers.ListField(
         child=serializers.ChoiceField(choices=LibraryUsage.choices),
@@ -89,6 +112,7 @@ class DocumentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = [
+            "auto_review",
             "project",
             "is_reference",
             "library_standard",
@@ -117,22 +141,10 @@ class DocumentWriteSerializer(serializers.ModelSerializer):
             "is_reference",
             getattr(self.instance, "is_reference", False),
         )
-        project = attrs.get("project") or getattr(self.instance, "project", None)
-        library_standard = attrs.get("library_standard") or getattr(
-            self.instance,
-            "library_standard",
-            None,
-        )
-        library_company = attrs.get("library_company") or getattr(
-            self.instance,
-            "library_company",
-            None,
-        )
-        library_project = attrs.get("library_project") or getattr(
-            self.instance,
-            "library_project",
-            None,
-        )
+        project = attrs.get("project", getattr(self.instance, "project", None))
+        library_standard = attrs.get("library_standard", getattr(self.instance, "library_standard", None))
+        library_company = attrs.get("library_company", getattr(self.instance, "library_company", None))
+        library_project = attrs.get("library_project", getattr(self.instance, "library_project", None))
         library_kind = attrs.get(
             "library_kind",
             getattr(self.instance, "library_kind", LibraryDocumentKind.OTHER),
@@ -145,15 +157,18 @@ class DocumentWriteSerializer(serializers.ModelSerializer):
         )
         upload = attrs.get("file")
 
-        if not is_reference and project is None and self.instance is None:
+        if not is_reference and project is None:
             raise serializers.ValidationError(
                 {"project": "Se requiere un proyecto para documentos no-referencia."}
             )
 
         if is_reference:
-            attrs.pop("checklist_item", None)
+            attrs["checklist_item"] = None
             attrs["project"] = None
             attrs["requirement"] = None
+            request = self.context.get("request")
+            if request and not request.user.is_staff and not (library_company or library_project):
+                raise serializers.ValidationError({"library_company": "Solo un administrador puede publicar referencias globales. Selecciona tu empresa."})
             if library_project:
                 if library_company and library_project.company_id != library_company.id:
                     raise serializers.ValidationError(

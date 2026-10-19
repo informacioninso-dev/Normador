@@ -3,6 +3,7 @@ import type {
   AppUser,
   ChecklistItem,
   Company,
+  CompanyMembership,
   DashboardData,
   DocumentRecord,
   DocumentReview,
@@ -18,6 +19,7 @@ import type {
   WorkLogEntry,
 } from "./types";
 import { getAuthHeaders } from "./auth";
+import { cache } from "react";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -41,23 +43,23 @@ function buildApiUrl(path: string, query?: QueryParams) {
   return url;
 }
 
-async function readErrorMessage(response: Response) {
+export class ApiError extends Error {
+  constructor(message: string, public fieldErrors: Record<string, string> = {}) { super(message); }
+}
+
+async function readApiError(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     const payload = (await response.json()) as Record<string, unknown>;
     if (typeof payload.detail === "string") {
-      return payload.detail;
+      return new ApiError(payload.detail);
     }
-    const flattened = Object.entries(payload)
-      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
-      .join(" | ");
-    if (flattened) {
-      return flattened;
-    }
+    const fieldErrors = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "non_field_errors").map(([key, value]) => [key, (Array.isArray(value) ? value.join(" ") : String(value)).replaceAll("This field is required.", "Este campo es obligatorio.").replaceAll("This field may not be blank.", "Este campo no puede estar vacío.")]));
+    return new ApiError(Array.isArray(payload.non_field_errors) ? payload.non_field_errors.join(" ") : "Revisa los campos indicados para continuar.", fieldErrors);
   }
 
   const text = await response.text();
-  return text || `HTTP ${response.status}`;
+  return new ApiError(response.status >= 500 ? "El servidor no pudo completar la solicitud. Reintenta sin cambiar los datos." : text || `HTTP ${response.status}`);
 }
 
 export async function apiGet<T>(path: string, query?: QueryParams): Promise<T> {
@@ -71,7 +73,7 @@ export async function apiGet<T>(path: string, query?: QueryParams): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw await readApiError(response);
   }
 
   return (await response.json()) as T;
@@ -109,7 +111,7 @@ export async function apiJsonMutation<T>(
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw await readApiError(response);
   }
 
   if (response.status === 204) {
@@ -134,7 +136,7 @@ export async function apiFormMutation<T>(
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw await readApiError(response);
   }
 
   if (response.status === 204) {
@@ -152,8 +154,8 @@ export function decodeFlash(searchParams?: Record<string, string | string[] | un
   const success = pick(searchParams?.success);
 
   return {
-    error: error ? decodeURIComponent(error) : "",
-    success: success ? decodeURIComponent(success) : "",
+    error: error ?? "",
+    success: success ?? "",
   };
 }
 
@@ -213,15 +215,17 @@ export async function getDashboardData(): Promise<DashboardData> {
 }
 
 export async function getCompaniesData() {
-  const [companies, projects] = await Promise.all([
+  const [companies, projects, memberships] = await Promise.all([
     safeApiGet<Company[]>("/api/companies/", []),
     safeApiGet<Project[]>("/api/projects/", []),
+    safeApiGet<CompanyMembership[]>("/api/company-memberships/", []),
   ]);
 
   return {
     companies: companies.data,
     projects: projects.data,
-    errors: [companies.error, projects.error].filter(Boolean) as string[],
+    memberships: memberships.data,
+    errors: [companies.error, projects.error, memberships.error].filter(Boolean) as string[],
   };
 }
 
@@ -257,7 +261,7 @@ export async function apiDelete(path: string): Promise<void> {
     headers: { ...authHeaders },
   });
   if (!response.ok && response.status !== 204) {
-    throw new Error(await readErrorMessage(response));
+    throw await readApiError(response);
   }
 }
 
@@ -298,8 +302,20 @@ export async function getLibraryData() {
   };
 }
 
-export async function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace> {
-  const projectResponse = await safeApiGet<Project | null>(`/api/projects/${projectId}/`, null);
+const getProjectRecord = cache((projectId: number) => safeApiGet<Project | null>(`/api/projects/${projectId}/`, null));
+
+export async function getProjectHeader(projectId: number) {
+  const [project, report] = await Promise.all([
+    getProjectRecord(projectId),
+    safeApiGet<{ summary: { documentary_progress_percentage: number; implementation_progress_percentage: number; has_simulated_reviews: boolean } } | null>(`/api/projects/${projectId}/progress_report/`, null),
+  ]);
+  return { project: project.data, summary: report.data?.summary, error: project.error || report.error };
+}
+
+type WorkspaceSection = Exclude<keyof ProjectWorkspace, "project" | "errors">;
+export async function getProjectWorkspace(projectId: number, sections?: WorkspaceSection[], documentText = false): Promise<ProjectWorkspace> {
+  const projectResponse = await getProjectRecord(projectId);
+  const needs = (name: WorkspaceSection) => !sections || sections.includes(name);
   const project = projectResponse.data;
 
   if (!project) {
@@ -335,37 +351,39 @@ export async function getProjectWorkspace(projectId: number): Promise<ProjectWor
     worklogs,
     worklogEvidences,
   ] = await Promise.all([
-    safeApiGet<Standard | null>(`/api/standards/${project.standard}/`, null),
-    safeApiGet<StandardRequirement[]>("/api/requirements/", [], {
+    needs("standard") ? safeApiGet<Standard | null>(`/api/standards/${project.standard}/`, null) : { data: null, error: undefined },
+    needs("requirements") ? safeApiGet<StandardRequirement[]>("/api/requirements/", [], {
       standard: project.standard,
-    }),
-    safeApiGet<ChecklistItem[]>("/api/checklist-items/", [], {
+    }) : { data: [], error: undefined },
+    needs("checklistItems") ? safeApiGet<ChecklistItem[]>("/api/checklist-items/", [], {
       project: projectId,
-    }),
-    safeApiGet<DocumentRecord[]>("/api/documents/", [], {
+    }) : { data: [], error: undefined },
+    needs("documents") ? safeApiGet<DocumentRecord[]>("/api/documents/", [], {
       project: projectId,
-    }),
-    safeApiGet<DocumentReview[]>("/api/document-reviews/", [], {
+      summary: documentText ? undefined : "true",
+    }) : { data: [], error: undefined },
+    needs("reviews") ? safeApiGet<DocumentReview[]>("/api/document-reviews/", [], {
       project: projectId,
-    }),
-    safeApiGet<Finding[]>("/api/findings/", [], {
+      summary: "true",
+    }) : { data: [], error: undefined },
+    needs("findings") ? safeApiGet<Finding[]>("/api/findings/", [], {
       project: projectId,
-    }),
-    safeApiGet<ActionPlan[]>("/api/action-plans/", [], {
+    }) : { data: [], error: undefined },
+    needs("actionPlans") ? safeApiGet<ActionPlan[]>("/api/action-plans/", [], {
       project: projectId,
-    }),
-    safeApiGet<ImplementationActivity[]>("/api/implementation-activities/", [], {
+    }) : { data: [], error: undefined },
+    needs("implementationActivities") ? safeApiGet<ImplementationActivity[]>("/api/implementation-activities/", [], {
       project: projectId,
-    }),
-    safeApiGet<EvidenceRecord[]>("/api/evidences/", [], {
+    }) : { data: [], error: undefined },
+    needs("evidences") ? safeApiGet<EvidenceRecord[]>("/api/evidences/", [], {
       project: projectId,
-    }),
-    safeApiGet<WorkLogEntry[]>("/api/worklogs/", [], {
+    }) : { data: [], error: undefined },
+    needs("worklogs") ? safeApiGet<WorkLogEntry[]>("/api/worklogs/", [], {
       project: projectId,
-    }),
-    safeApiGet<WorkLogEvidenceRecord[]>("/api/worklog-evidences/", [], {
+    }) : { data: [], error: undefined },
+    needs("worklogEvidences") ? safeApiGet<WorkLogEvidenceRecord[]>("/api/worklog-evidences/", [], {
       project: projectId,
-    }),
+    }) : { data: [], error: undefined },
   ]);
 
   return {

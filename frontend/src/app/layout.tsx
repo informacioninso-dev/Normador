@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Normador",
+  title: "NORMAN AI",
   description: "Plataforma local para implementacion normativa asistida por IA.",
 };
 

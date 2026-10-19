@@ -1,9 +1,10 @@
+from apps.companies.api_access import CompanyRelationsMixin, PrivateFileMixin
+from apps.companies.access import can_access_company, WRITE_ROLES, VALIDATE_ROLES
 from decimal import Decimal
 from pathlib import Path
 
 from rest_framework import serializers
 
-from apps.common.choices import WorklogStatus
 from apps.implementation.models import (
     ImplementationChecklistItem,
     Project,
@@ -25,10 +26,33 @@ SUPPORTED_WORKLOG_EVIDENCE_EXTENSIONS = {
 }
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
+    can_edit = serializers.SerializerMethodField()
+    can_validate = serializers.SerializerMethodField()
+
+    def get_can_edit(self, obj):
+        request = self.context.get("request")
+        return bool(request and can_access_company(request.user, obj.company_id, WRITE_ROLES))
+
+    def get_can_validate(self, obj):
+        request = self.context.get("request")
+        return bool(request and can_access_company(request.user, obj.company_id, VALIDATE_ROLES))
     checklist_items_count = serializers.SerializerMethodField()
     company_name = serializers.CharField(source="company.name", read_only=True)
     standard_name = serializers.CharField(source="standard.name", read_only=True)
+
+    def validate_company(self, company):
+        if self.instance and self.instance.company_id != company.pk:
+            raise serializers.ValidationError("La empresa de un proyecto existente no se puede cambiar.")
+        request = self.context.get("request")
+        if request and not can_access_company(request.user, company.pk, WRITE_ROLES):
+            raise serializers.ValidationError("Empresa no disponible para este usuario.")
+        return company
+
+    def validate_standard(self, standard):
+        if self.instance and self.instance.standard_id != standard.pk:
+            raise serializers.ValidationError("Crea un proyecto separado para otra norma.")
+        return standard
 
     def get_checklist_items_count(self, obj):
         return getattr(obj, "checklist_items_count", obj.checklist_items.count())
@@ -36,6 +60,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
+            "can_edit", "can_validate",
             "id",
             "company",
             "company_name",
@@ -60,7 +85,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         ]
 
 
-class ImplementationChecklistItemSerializer(serializers.ModelSerializer):
+class ImplementationChecklistItemSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name", read_only=True)
     clause = serializers.CharField(source="requirement.clause", read_only=True)
     process_area = serializers.CharField(source="requirement.process_area", read_only=True)
@@ -70,6 +95,13 @@ class ImplementationChecklistItemSerializer(serializers.ModelSerializer):
         source="requirement.requires_real_evidence",
         read_only=True,
     )
+
+    def validate(self, attrs):
+        protected = {"status", "progress_percentage", "requires_evidence", "requires_document", "is_not_applicable",
+                     "not_applicable_justification", "acceptance_criteria", "review_questions", "ai_review_focus"}
+        if protected.intersection(self.initial_data):
+            raise serializers.ValidationError("El cumplimiento y sus criterios se calculan en el backend.")
+        return attrs
 
     class Meta:
         model = ImplementationChecklistItem
@@ -100,6 +132,7 @@ class ImplementationChecklistItemSerializer(serializers.ModelSerializer):
             "due_date",
             "is_not_applicable",
             "not_applicable_justification",
+            "not_applicable_approved_by", "not_applicable_approved_at", "not_applicable_review",
             "created_at",
             "updated_at",
         ]
@@ -113,6 +146,7 @@ class ImplementationChecklistItemSerializer(serializers.ModelSerializer):
             "process_area",
             "criticality",
             "requires_real_evidence",
+            "not_applicable_approved_by", "not_applicable_approved_at", "not_applicable_review",
             "created_at",
             "updated_at",
         ]
@@ -173,7 +207,7 @@ class WorkLogEntrySerializer(serializers.ModelSerializer):
         ]
 
 
-class WorkLogEntryCreateSerializer(serializers.ModelSerializer):
+class WorkLogEntryCreateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     consultant = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
@@ -259,7 +293,7 @@ class WorkLogEntryCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class WorkLogEntryUpdateSerializer(serializers.ModelSerializer):
+class WorkLogEntryUpdateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     class Meta:
         model = WorkLogEntry
         fields = [
@@ -295,7 +329,7 @@ class WorkLogApprovalSerializer(serializers.Serializer):
         return attrs
 
 
-class WorkLogEvidenceSerializer(serializers.ModelSerializer):
+class WorkLogEvidenceSerializer(PrivateFileMixin, serializers.ModelSerializer):
     worklog_title = serializers.CharField(source="worklog.title", read_only=True)
     project = serializers.IntegerField(source="worklog.project_id", read_only=True)
     project_name = serializers.CharField(source="worklog.project.name", read_only=True)
@@ -335,7 +369,7 @@ class WorkLogEvidenceSerializer(serializers.ModelSerializer):
         ]
 
 
-class WorkLogEvidenceCreateSerializer(serializers.ModelSerializer):
+class WorkLogEvidenceCreateSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     title = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
 

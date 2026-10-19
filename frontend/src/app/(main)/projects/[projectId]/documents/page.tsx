@@ -1,6 +1,10 @@
+import { FormField } from "@/components/form-field";
+import { RoleForm } from "@/components/role-form";
 import { notFound } from "next/navigation";
 
-import { uploadDocumentAction } from "@/app/actions";
+import { uploadDocumentAction, reprocessDocumentAction } from "@/app/actions";
+import { ProcessingRefresh } from "@/components/processing-refresh";
+import { NormanAvatar } from "@/components/norman-avatar";
 import { EmptyState } from "@/components/empty-state";
 import { FlashBanner } from "@/components/flash-banner";
 import { SectionCard } from "@/components/section-card";
@@ -37,7 +41,7 @@ export default async function ProjectDocumentsPage({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId);
+  const workspace = await getProjectWorkspace(projectId, ["requirements","documents"], true);
 
   if (!workspace.project) {
     notFound();
@@ -53,48 +57,44 @@ export default async function ProjectDocumentsPage({
         title="Cargar documento"
         description="Sube el archivo y el sistema extrae el texto, genera chunks y embeddings automaticamente."
         action={
-          <form action={uploadDocumentAction} className="space-y-3" encType="multipart/form-data">
+          <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={uploadDocumentAction} className="space-y-3" encType="multipart/form-data">
             <input type="hidden" name="return_path" value={returnPath} />
             <input type="hidden" name="project" value={projectId} />
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Titulo (opcional)
-              </label>
-              <input name="title" placeholder="Procedimiento de control documental" />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="title" placeholder="Procedimiento de control documental" /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Tipo de documento
-              </label>
-              <select name="document_type" required defaultValue="PROCEDIMIENTO">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="document_type" required defaultValue="PROCEDIMIENTO">
                 {documentTypes.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Requisito (opcional)
-              </label>
-              <select name="requirement" defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="requirement" defaultValue="">
                 <option value="">Sin requisito especifico</option>
                 {workspace.requirements.map((req) => (
                   <option key={req.id} value={req.id}>
                     {req.clause} — {req.title}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Archivo (pdf, docx, xlsx, txt)
-              </label>
-              <input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required /></FormField>
             </div>
             <SubmitButton label="Cargar y procesar" pendingLabel="Procesando..." className="w-full" />
-          </form>
+          </RoleForm>
         }
       >
         <div className="space-y-3">
@@ -102,6 +102,7 @@ export default async function ProjectDocumentsPage({
             workspace.documents.map((document) => (
               <article
                 key={document.id}
+                id={`document-${document.id}`}
                 className="rounded-[26px] border border-black/8 bg-white/78 p-5"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -110,7 +111,7 @@ export default async function ProjectDocumentsPage({
                       {document.document_type} · {document.file_extension?.toUpperCase() || ""}
                     </p>
                     <h3 className="mt-2 text-xl font-semibold text-ink">{document.title}</h3>
-                    <p className="mt-2 text-xs uppercase tracking-[0.14em] text-ink/45">
+                    <p className="mt-2 text-xs uppercase tracking-[0.14em] text-ink/70">
                       {document.requirement_title || "Sin requisito"} ·{" "}
                       {formatDateTime(document.uploaded_at)}
                     </p>
@@ -122,27 +123,44 @@ export default async function ProjectDocumentsPage({
 
                 <div className="mt-5 grid gap-4 md:grid-cols-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Chunks</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Chunks</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{document.chunk_count}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Archivo</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">{document.file_name}</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Archivo</p>
+                    <a href={document.file} className="mt-1 inline-block text-sm font-semibold text-moss underline underline-offset-4">{document.file_name}</a>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/45">Error</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Error</p>
                     <p className="mt-1 text-sm font-semibold text-ink">
-                      {document.processing_error || "—"}
+                      {document.latest_job?.error || document.processing_error || "—"}
                     </p>
                   </div>
                 </div>
 
+                {document.latest_job && (
+                  <div className="mt-4 flex items-center gap-2.5" role="status">
+                    <NormanAvatar className="h-9 w-9" mood={document.latest_job.status === "FAILED" ? "attention" : document.latest_job.status === "SUCCESS" ? "ready" : "working"} />
+                    <p className="text-sm text-ink">
+                      <span className="font-semibold">NORMAN</span> · {({ PENDING: "En cola", RUNNING: "Procesando documento", RETRY: "Reintentando procesamiento", SUCCESS: "Procesamiento completado", FAILED: "No se pudo completar el procesamiento" })[document.latest_job.status]}
+                      {document.latest_job.attempts > 1 ? ` · Intento ${document.latest_job.attempts}` : ""}
+                    </p>
+                  </div>
+                )}
+                <ProcessingRefresh active={Boolean(document.latest_job && ["PENDING", "RUNNING", "RETRY"].includes(document.latest_job.status))} />
+                {document.latest_job?.status === "FAILED" && workspace.project?.can_edit && (
+                  <RoleForm allowed action={reprocessDocumentAction} className="mt-3">
+                    <input type="hidden" name="return_path" value={returnPath} />
+                    <input type="hidden" name="document" value={document.id} />
+                    <SubmitButton label="Reintentar procesamiento" pendingLabel="Solicitando..." />
+                  </RoleForm>
+                )}
                 {document.extracted_text && (
                   <div className="mt-4 rounded-[18px] bg-sand/75 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                       Texto extraido
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-ink/72">
+                    <p className="mt-2 text-sm leading-6 text-ink/70">
                       {document.extracted_text.slice(0, 400)}
                       {document.extracted_text.length > 400 ? "…" : ""}
                     </p>

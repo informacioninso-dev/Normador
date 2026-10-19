@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 
-import { apiDelete, apiFormMutation, apiJsonMutation, apiGet } from "@/lib/api";
+import { apiDelete, apiFormMutation, apiJsonMutation, apiGet, ApiError } from "@/lib/api";
+
+function formFailure(error: unknown) {
+  return { error: error instanceof Error ? error.message : "No se pudo completar la solicitud. Reintenta.", fieldErrors: error instanceof ApiError ? error.fieldErrors : undefined };
+}
 
 function textValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -34,7 +38,38 @@ function redirectWithMessage(
 }
 
 function ensureReturnPath(formData: FormData) {
-  return textValue(formData, "return_path") || "/";
+  const path = textValue(formData, "return_path");
+  return path.startsWith("/") && !path.startsWith("//") && !path.includes("\\") ? path : "/";
+}
+
+export async function saveMembershipAction(formData: FormData) {
+  const id = textValue(formData, "membership_id");
+  try {
+    await apiJsonMutation(`/api/company-memberships/${id ? `${id}/` : ""}`, id ? "PATCH" : "POST", {
+      company: numberValue(formData, "company"),
+      username: textValue(formData, "username"),
+      role: textValue(formData, "role"),
+      is_active: formData.get("is_active") !== "false",
+    });
+  } catch (error) {
+    return formFailure(error);
+  }
+  redirectWithMessage("/companies", "success", "Acceso actualizado.");
+}
+
+export async function confirmNotApplicableAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+  const item = numberValue(formData, "checklist_item");
+  try {
+    if (!item) throw new Error("Selecciona el requisito.");
+    await apiJsonMutation(`/api/checklist-items/${item}/confirm_not_applicable/`, "POST", {
+      justification: textValue(formData, "justification"),
+      confirmed: formData.get("confirmed") === "on",
+    });
+  } catch (error) {
+    return formFailure(error);
+  }
+  redirectWithMessage(returnPath, "success", "No aplicabilidad aprobada. Los pendientes abiertos deben resolverse antes del cierre.");
 }
 
 export async function createCompanyAction(formData: FormData) {
@@ -48,7 +83,7 @@ export async function createCompanyAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear la empresa.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Empresa creada.");
@@ -62,11 +97,7 @@ export async function createProjectAction(formData: FormData) {
   const companyRuc = textValue(formData, "company_ruc");
 
   if (!selectedCompanyId && (!companyName || !companyRuc)) {
-    redirectWithMessage(
-      returnPath,
-      "error",
-      "Selecciona una empresa o crea una rapida con nombre y RUC.",
-    );
+    return { error: "Selecciona una empresa o crea una rapida con nombre y RUC." };
   }
 
   try {
@@ -93,7 +124,7 @@ export async function createProjectAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear el proyecto.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(successReturnPath, "success", "Proyecto creado y checklist generado.");
@@ -112,6 +143,7 @@ export async function uploadDocumentAction(formData: FormData) {
   const file = formData.get("file");
 
   payload.set("project", project);
+  payload.set("auto_review", autoReview ? "true" : "false");
   payload.set("document_type", documentType);
   if (requirement) {
     payload.set("requirement", requirement);
@@ -135,41 +167,26 @@ export async function uploadDocumentAction(formData: FormData) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo cargar el documento.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   if (!document) {
-    redirectWithMessage(returnPath, "error", "No se pudo cargar el documento.");
+    return { error: "No se pudo cargar el documento." };
   }
 
-  const uploadedDocument = document;
+  redirectWithMessage(returnPath, "success", autoReview
+    ? "Documento cargado. Consulta el procesamiento y la revision en Documentos y Revisiones."
+    : "Documento cargado. Consulta el estado de procesamiento en Documentos.");
+}
 
-  if (autoReview && requirement && uploadedDocument.status === "LISTO") {
-    let reviewExecuted = false;
-    try {
-      await apiJsonMutation("/api/document-reviews/", "POST", {
-        document: uploadedDocument.id,
-        review_type: "CUMPLIMIENTO_NORMATIVO",
-        requirements: [Number(requirement)],
-      });
-      reviewExecuted = true;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo ejecutar la revision AI.";
-      redirectWithMessage(
-        returnPath,
-        "error",
-        `Documento cargado, pero la revision AI fallo: ${message}`,
-      );
-    }
-    if (reviewExecuted) {
-      redirectWithMessage(returnPath, "success", "Documento cargado y revision AI ejecutada.");
-    }
+export async function reprocessDocumentAction(formData: FormData) {
+  const returnPath = ensureReturnPath(formData);
+  try {
+    await apiJsonMutation(`/api/documents/${numberValue(formData, "document")}/reprocess/`, "POST", {});
+  } catch (error) {
+    return formFailure(error);
   }
-
-  redirectWithMessage(returnPath, "success", "Documento cargado y procesado.");
+  redirectWithMessage(returnPath, "success", "Procesamiento solicitado. Consulta su estado en el documento.");
 }
 
 export async function runReviewAction(formData: FormData) {
@@ -184,13 +201,13 @@ export async function runReviewAction(formData: FormData) {
   }
 
   try {
-    await apiJsonMutation("/api/document-reviews/", "POST", payload);
+    await apiJsonMutation("/api/document-reviews/enqueue/", "POST", payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo ejecutar la revision.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
-  redirectWithMessage(returnPath, "success", "Revision ejecutada.");
+  redirectWithMessage(returnPath, "success", "Revisión solicitada. Puedes consultar el estado y el resultado en Revisiones.");
 }
 
 export async function createActionPlanAction(formData: FormData) {
@@ -210,7 +227,7 @@ export async function createActionPlanAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear el plan.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Plan de accion creado.");
@@ -223,7 +240,7 @@ export async function transitionActionPlanAction(formData: FormData) {
   const completionNotes = textValue(formData, "completion_notes");
 
   if (!actionPlanId || !transition) {
-    redirectWithMessage(returnPath, "error", "Faltan datos para actualizar el plan.");
+    return { error: "Faltan datos para actualizar el plan." };
   }
 
   try {
@@ -234,7 +251,7 @@ export async function transitionActionPlanAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo actualizar el plan.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Plan de accion actualizado.");
@@ -258,7 +275,7 @@ export async function createImplementationActivityAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo registrar la actividad.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Actividad registrada.");
@@ -312,7 +329,7 @@ export async function createWorklogAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo registrar la jornada.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Jornada registrada.");
@@ -341,7 +358,7 @@ export async function createWorklogEvidenceAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo subir el soporte.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Soporte agregado a la jornada.");
@@ -352,7 +369,7 @@ export async function regenerateChecklistFromLibraryAction(formData: FormData) {
   const projectId = numberValue(formData, "project_id");
 
   if (!projectId) {
-    redirectWithMessage(returnPath, "error", "Falta el proyecto para actualizar el checklist.");
+    return { error: "Falta el proyecto para actualizar el checklist." };
   }
 
   try {
@@ -372,7 +389,7 @@ export async function regenerateChecklistFromLibraryAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo actualizar el checklist.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 }
 
@@ -382,7 +399,7 @@ export async function reviewWorklogAction(formData: FormData) {
   const transition = textValue(formData, "transition");
 
   if (!worklogId || !transition) {
-    redirectWithMessage(returnPath, "error", "Faltan datos para revisar la jornada.");
+    return { error: "Faltan datos para revisar la jornada." };
   }
 
   try {
@@ -398,7 +415,7 @@ export async function reviewWorklogAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo revisar la jornada.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Jornada revisada.");
@@ -438,7 +455,7 @@ export async function createEvidenceAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo registrar la evidencia.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Evidencia registrada.");
@@ -451,9 +468,9 @@ export async function deleteCompanyAction(formData: FormData) {
     await apiDelete(`/api/companies/${id}/`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo eliminar la empresa.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
-  redirectWithMessage(returnPath, "success", "Empresa eliminada.");
+  redirectWithMessage(returnPath, "success", "Empresa archivada; sus datos se conservan.");
 }
 
 export async function deleteProjectAction(formData: FormData) {
@@ -463,9 +480,9 @@ export async function deleteProjectAction(formData: FormData) {
     await apiDelete(`/api/projects/${id}/`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo eliminar el proyecto.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
-  redirectWithMessage(returnPath, "success", "Proyecto eliminado.");
+  redirectWithMessage(returnPath, "success", "Proyecto archivado; sus datos se conservan.");
 }
 
 export async function createUserAction(formData: FormData) {
@@ -481,7 +498,7 @@ export async function createUserAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear el usuario.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
   redirectWithMessage(returnPath, "success", "Usuario creado.");
 }
@@ -495,14 +512,14 @@ export async function updateUserAction(formData: FormData) {
       first_name: textValue(formData, "first_name"),
       last_name: textValue(formData, "last_name"),
       is_staff: formData.get("is_staff") === "on",
-      is_active: formData.get("is_active") !== "off",
+      is_active: formData.get("is_active") === "on",
     };
     const password = textValue(formData, "password");
     if (password) payload.password = password;
     await apiJsonMutation(`/api/users/${id}/`, "PATCH", payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo actualizar el usuario.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
   redirectWithMessage(returnPath, "success", "Usuario actualizado.");
 }
@@ -514,9 +531,9 @@ export async function deleteUserAction(formData: FormData) {
     await apiDelete(`/api/users/${id}/`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo eliminar el usuario.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
-  redirectWithMessage(returnPath, "success", "Usuario eliminado.");
+  redirectWithMessage(returnPath, "success", "Usuario desactivado; su historial se conserva.");
 }
 
 export async function validateEvidenceAction(formData: FormData) {
@@ -525,8 +542,11 @@ export async function validateEvidenceAction(formData: FormData) {
   const transition = textValue(formData, "transition");
   const validationNotes = textValue(formData, "validation_notes");
 
+  if (transition === "validate_evidence" && formData.get("confirmed") !== "on") return { error: "Confirma que revisaste el soporte antes de validarlo." };
+  if (transition === "reject_evidence" && !validationNotes) return { error: "Indica el motivo para que el implementador pueda corregir la evidencia.", fieldErrors: { validation_notes: "El motivo del rechazo es obligatorio." } };
+
   if (!evidenceId || !transition) {
-    redirectWithMessage(returnPath, "error", "Faltan datos para validar la evidencia.");
+    return { error: "Faltan datos para validar la evidencia." };
   }
 
   try {
@@ -536,7 +556,7 @@ export async function validateEvidenceAction(formData: FormData) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo actualizar la evidencia.";
-    redirectWithMessage(returnPath, "error", message);
+    return formFailure(error);
   }
 
   redirectWithMessage(returnPath, "success", "Evidencia actualizada.");

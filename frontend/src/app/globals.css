@@ -8,7 +8,7 @@
   --foreground: #1b2554;
   --accent: #4f7ed9;
   --accent-deep: #2d4f9a;
-  --muted: #6b7fb0;
+  --muted: #435b88;
   --surface: rgba(255, 255, 255, 0.84);
   --surface-strong: rgba(255, 255, 255, 0.96);
   --surface-soft: rgba(236, 242, 255, 0.9);
@@ -39,6 +39,15 @@ body {
 body {
   font-family: var(--font-body);
 }
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--accent-deep);
+  outline-offset: 3px;
+}
+
+input, select, textarea { font-size: 1rem; }
+[aria-invalid="true"] { border-color: #a91d39; }
+html { scroll-padding-top: 6rem; }
 
 a {
   color: inherit;

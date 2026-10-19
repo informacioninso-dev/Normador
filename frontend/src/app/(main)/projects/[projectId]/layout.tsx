@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 
 import { ProjectTabs } from "@/components/project-tabs";
 import { StatusBadge } from "@/components/status-badge";
-import { getProjectWorkspace } from "@/lib/api";
-import { summarizeProject } from "@/lib/metrics";
+import { getProjectHeader } from "@/lib/api";
+
 import { formatDate } from "@/lib/presentation";
 
 export default async function ProjectLayout({
@@ -20,13 +20,13 @@ export default async function ProjectLayout({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId);
+  const { project, summary, error } = await getProjectHeader(projectId);
 
-  if (!workspace.project) {
+  if (!project) {
     notFound();
   }
 
-  const summary = summarizeProject(workspace.project, workspace);
+
 
   return (
     <div className="space-y-5">
@@ -36,19 +36,19 @@ export default async function ProjectLayout({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-moss">
-                {workspace.project.company_name}
+                {project.company_name}
               </span>
-              <StatusBadge value={workspace.project.status} />
+              <StatusBadge value={project.status} />
             </div>
             <h1
               className="mt-1.5 text-3xl font-bold leading-tight text-ink md:text-4xl"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              {workspace.project.name}
+              {project.name}
             </h1>
-            {workspace.project.scope && (
-              <p className="mt-1 text-sm leading-6 text-ink/60 line-clamp-2">
-                {workspace.project.scope}
+            {project.scope && (
+              <p className="mt-1 text-sm leading-6 text-ink/70 line-clamp-2">
+                {project.scope}
               </p>
             )}
           </div>
@@ -56,13 +56,13 @@ export default async function ProjectLayout({
           {/* Stats strip */}
           <div className="flex shrink-0 flex-wrap gap-2">
             {[
-              { label: "Norma", value: workspace.project.standard_name },
-              { label: "Documental", value: `${summary.documentaryProgress}%` },
-              { label: "Implementación", value: `${summary.implementationProgress}%` },
-              { label: "Meta", value: formatDate(workspace.project.target_date) },
+              { label: "Norma", value: project.standard_name },
+              { label: "Documental", value: summary ? `${summary.documentary_progress_percentage}%` : "—" },
+              { label: "Implementación", value: summary ? `${summary.implementation_progress_percentage}%` : "—" },
+              { label: "Meta", value: formatDate(project.target_date) },
             ].map((stat) => (
               <div key={stat.label} className="ui-muted min-w-[90px] rounded-[18px] px-4 py-3 text-center">
-                <p className="text-xs uppercase tracking-[0.16em] text-ink/40">{stat.label}</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{stat.label}</p>
                 <p className="mt-1 text-sm font-bold text-ink">{stat.value}</p>
               </div>
             ))}
@@ -75,7 +75,10 @@ export default async function ProjectLayout({
         </div>
       </section>
 
-      {children}
+      {!project?.can_edit && <p className="text-sm text-ink/80">{project?.can_validate ? "Acceso de auditor: consulta y validación. La preparación de documentos corresponde al implementador." : "Acceso de consulta: puedes revisar y descargar la información del proyecto."}</p>}
+      {summary?.has_simulated_reviews && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Este proyecto contiene revisiones simuladas de desarrollo. Sus resultados sirven para probar el flujo y no acreditan cumplimiento normativo.</p>}
+
+      {error && <p role="alert">No se pudo cargar el resumen de avance. {error}</p>}{children}
     </div>
   );
 }

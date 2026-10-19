@@ -1,3 +1,5 @@
+> Documento historico: consultar README.md, SPEC.md, ARCHITECTURE.md y TASKS.md en la raiz para instrucciones vigentes. No ejecutar comandos de instalacion o reinicio de este documento sobre datos existentes.
+
 # Pilot Validation Checklist
 
 - `backend/manage.py migrate` ejecuta sin errores

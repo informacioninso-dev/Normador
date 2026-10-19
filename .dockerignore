@@ -1,0 +1,14 @@
+.git
+**/.venv
+**/__pycache__
+**/node_modules
+**/.next
+**/.env
+**/.env.local
+**/*.sqlite3
+**/*.log
+**/*.tsbuildinfo
+backend/media
+backend/test-media
+runtime-logs
+.tmp

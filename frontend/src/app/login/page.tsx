@@ -1,3 +1,5 @@
+import { FormField } from "@/components/form-field";
+import { ActionForm } from "@/components/action-form";
 import type { Metadata } from "next";
 
 import { BrandLockup } from "@/components/brand-lockup";
@@ -5,7 +7,7 @@ import { PasswordInput } from "@/components/password-input";
 import { SubmitButton } from "@/components/submit-button";
 import { loginAction } from "./actions";
 
-export const metadata: Metadata = { title: "Ingresar - Normador" };
+export const metadata: Metadata = { title: "Ingresar - NORMAN AI" };
 
 export default async function LoginPage({
   searchParams,
@@ -13,7 +15,7 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
-  const error = typeof query.error === "string" ? decodeURIComponent(query.error) : "";
+  const error = typeof query.error === "string" ? query.error : "";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-app-texture px-4">
@@ -30,41 +32,39 @@ export default async function LoginPage({
           </div>
 
           {error ? (
-            <div className="mb-5 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mb-5 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           ) : null}
 
-          <form action={loginAction} className="space-y-4">
+          <ActionForm action={loginAction} className="space-y-4">
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Usuario
-              </label>
-              <input
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input
                 name="username"
                 type="text"
                 placeholder="admin"
                 required
                 autoComplete="username"
                 className="w-full"
-              />
+              /></FormField>
             </div>
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Contrasena
-              </label>
-              <PasswordInput
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><PasswordInput
                 name="password"
                 placeholder="********"
                 autoComplete="current-password"
-              />
+              /></FormField>
             </div>
             <SubmitButton
               label="Ingresar"
               pendingLabel="Verificando..."
               className="w-full"
             />
-          </form>
+          </ActionForm>
         </div>
       </div>
     </div>

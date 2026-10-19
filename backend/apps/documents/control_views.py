@@ -1,3 +1,4 @@
+from apps.companies.api_access import CompanyScopedViewMixin
 from django.db import IntegrityError
 from django.db.models import Prefetch
 from django.http import FileResponse
@@ -17,7 +18,7 @@ from apps.documents.control_serializers import (
 from apps.documents.models import ControlledDocument, DocumentControlEvent, DocumentRevision
 
 
-class ControlledDocumentViewSet(
+class ControlledDocumentViewSet(CompanyScopedViewMixin,
     mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
@@ -29,8 +30,6 @@ class ControlledDocumentViewSet(
             Prefetch("revisions", queryset=DocumentRevision.objects.select_related("document", "created_by", "approved_by")),
             Prefetch("control_events", queryset=DocumentControlEvent.objects.select_related("user", "revision")),
         )
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(project__company__created_by=self.request.user)
         for field in ["project", "kind"]:
             value = self.request.query_params.get(field)
             if value:

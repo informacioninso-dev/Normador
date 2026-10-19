@@ -154,7 +154,7 @@ export default async function ProjectReportPage({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-ink">{review.document_title}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/45">
+                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/70">
                     {review.review_type} · {review.ai_model_used || "mock"}
                   </p>
                 </div>
@@ -163,7 +163,7 @@ export default async function ProjectReportPage({
                   <StatusBadge value={review.risk_level} />
                 </div>
               </div>
-              <p className="mt-3 text-sm leading-6 text-ink/72">{review.summary}</p>
+              <p className="mt-3 text-sm leading-6 text-ink/70">{review.summary}</p>
             </div>
           ))}
           {!workspace.reviews.length && (
@@ -179,13 +179,13 @@ export default async function ProjectReportPage({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-ink">{entry.title}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/45">
+                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-ink/70">
                     {entry.consultant_username} · {formatDate(entry.work_date)} · {entry.activity_type}
                   </p>
                 </div>
                 <StatusBadge value={entry.status} />
               </div>
-              <p className="mt-3 text-sm leading-6 text-ink/72">{entry.summary || "Sin detalle."}</p>
+              <p className="mt-3 text-sm leading-6 text-ink/70">{entry.summary || "Sin detalle."}</p>
             </div>
           ))}
           {!workspace.worklogs.length && (

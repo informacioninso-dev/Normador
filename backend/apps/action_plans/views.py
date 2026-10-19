@@ -1,3 +1,4 @@
+from apps.companies.api_access import CompanyScopedViewMixin
 from django.db.models import Count, Max, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -26,7 +27,7 @@ from apps.action_plans.services import (
 )
 
 
-class ActionPlanViewSet(viewsets.ModelViewSet):
+class ActionPlanViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     queryset = ActionPlan.objects.none()
     permission_classes = [IsAuthenticated]
 
@@ -145,7 +146,7 @@ class ActionPlanViewSet(viewsets.ModelViewSet):
         return Response(ActionPlanSerializer(action_plan).data)
 
 
-class ImplementationActivityViewSet(viewsets.ModelViewSet):
+class ImplementationActivityViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     queryset = ImplementationActivity.objects.none()
     permission_classes = [IsAuthenticated]
 
@@ -196,7 +197,7 @@ class ImplementationActivityViewSet(viewsets.ModelViewSet):
         return Response(read_serializer.data, status=status.HTTP_201_CREATED)
 
 
-class EvidenceViewSet(viewsets.ModelViewSet):
+class EvidenceViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
     queryset = Evidence.objects.none()
     permission_classes = [IsAuthenticated]
 

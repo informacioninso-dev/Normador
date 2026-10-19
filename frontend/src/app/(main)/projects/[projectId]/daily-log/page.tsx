@@ -1,3 +1,5 @@
+import { FormField } from "@/components/form-field";
+import { RoleForm } from "@/components/role-form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -103,7 +105,7 @@ export default async function ProjectDailyLogPage({
   }
 
   const [workspace, currentUser] = await Promise.all([
-    getProjectWorkspace(projectId),
+    getProjectWorkspace(projectId, ["worklogs","actionPlans","worklogEvidences"]),
     getCurrentUser(),
   ]);
 
@@ -167,7 +169,7 @@ export default async function ProjectDailyLogPage({
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map((item) => (
           <div key={item.label} className="ui-card rounded-[18px] p-3 md:p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink/45">{item.label}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{item.label}</p>
             <p className="mt-2 text-xl font-bold text-ink md:text-2xl">{item.value}</p>
           </div>
         ))}
@@ -200,7 +202,7 @@ export default async function ProjectDailyLogPage({
 
       {activeView === "nuevo" ? (
         <SectionCard title="Nueva jornada">
-          <form
+          <RoleForm allowed={Boolean(workspace.project?.can_edit)}
             action={createWorklogAction}
             encType="multipart/form-data"
             className="grid gap-4 lg:grid-cols-2"
@@ -209,113 +211,103 @@ export default async function ProjectDailyLogPage({
             <input type="hidden" name="project" value={projectId} />
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Plan
-              </label>
-              <select name="action_plan" defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="action_plan" defaultValue="">
                 <option value="">Jornada general</option>
                 {workspace.actionPlans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.title}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Actividad
-              </label>
-              <select name="activity_type" defaultValue="IMPLEMENTACION">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="activity_type" defaultValue="IMPLEMENTACION">
                 {activityOptions.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
                 ))}
-              </select>
+              </select></FormField>
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Fecha
-              </label>
-              <input type="date" name="work_date" defaultValue={today} />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="work_date" defaultValue={today} /></FormField>
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Titulo
-              </label>
-              <input name="title" placeholder="Sesion con cliente" required />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="title" placeholder="Sesion con cliente" required /></FormField>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                <FormField label={<>
                   Inicio
-                </label>
-                <select name="start_time" defaultValue="">
+                </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="start_time" defaultValue="">
                   <option value="">Sin hora</option>
                   {timeOptions.map((time) => (
                     <option key={`start-${time}`} value={time}>
                       {time}
                     </option>
                   ))}
-                </select>
+                </select></FormField>
               </div>
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                <FormField label={<>
                   Fin
-                </label>
-                <select name="end_time" defaultValue="">
+                </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="end_time" defaultValue="">
                   <option value="">Sin hora</option>
                   {timeOptions.map((time) => (
                     <option key={`end-${time}`} value={time}>
                       {time}
                     </option>
                   ))}
-                </select>
+                </select></FormField>
               </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                <FormField label={<>
                   Horas
-                </label>
-                <input name="logged_hours" type="number" step="0.25" min="0" placeholder="2.5" />
+                </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="logged_hours" type="number" step="0.25" min="0" placeholder="2.5" /></FormField>
               </div>
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+                <FormField label={<>
                   Facturable
-                </label>
-                <input name="billable_hours" type="number" step="0.25" min="0" placeholder="2.5" />
+                </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="billable_hours" type="number" step="0.25" min="0" placeholder="2.5" /></FormField>
               </div>
             </div>
 
             <div className="lg:col-span-2">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Actividad realizada
-              </label>
-              <textarea name="summary" placeholder="Trabajo realizado durante la jornada." />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><textarea name="summary" placeholder="Trabajo realizado durante la jornada." /></FormField>
             </div>
 
             <div className="lg:col-span-2">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+              <FormField label={<>
                 Entregables
-              </label>
-              <textarea name="deliverables" placeholder="Documentos, acuerdos o avances entregados." />
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><textarea name="deliverables" placeholder="Documentos, acuerdos o avances entregados." /></FormField>
             </div>
 
             <div className="ui-muted rounded-[18px] p-4 lg:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
                 Soporte opcional
               </p>
-              <p className="mt-1 text-sm leading-6 text-ink/60">
+              <p className="mt-1 text-sm leading-6 text-ink/70">
                 Adjunta una foto, PDF o archivo de respaldo para pagos por horas.
               </p>
               <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr]">
-                <input name="support_title" placeholder="Titulo del soporte" />
+                <input aria-label="Título del soporte" name="support_title" placeholder="Titulo del soporte" />
                 <input
                   type="file"
                   name="support_photo"
@@ -330,7 +322,7 @@ export default async function ProjectDailyLogPage({
                   aria-label="Subir archivo"
                 />
               </div>
-              <textarea
+              <textarea aria-label="Notas del soporte"
                 name="support_notes"
                 className="mt-3 min-h-[88px]"
                 placeholder="Nota opcional del soporte."
@@ -340,7 +332,7 @@ export default async function ProjectDailyLogPage({
             <div className="lg:col-span-2">
               <SubmitButton label="Registrar jornada" pendingLabel="Guardando..." className="w-full" />
             </div>
-          </form>
+          </RoleForm>
         </SectionCard>
       ) : null}
 
@@ -381,20 +373,20 @@ export default async function ProjectDailyLogPage({
                             <StatusBadge value={entry.status} />
                           </div>
                           <h3 className="mt-2 text-lg font-semibold text-ink">{entry.title}</h3>
-                          <p className="mt-2 text-sm leading-6 text-ink/72">{entry.summary || "Sin detalle."}</p>
+                          <p className="mt-2 text-sm leading-6 text-ink/70">{entry.summary || "Sin detalle."}</p>
                         </div>
 
                         <div className="grid grid-cols-3 gap-2 text-center lg:min-w-[210px]">
                           <div className="rounded-[14px] bg-sand/75 px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Horas</p>
+                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Horas</p>
                             <p className="mt-1 text-sm font-semibold text-ink">{entry.logged_hours}</p>
                           </div>
                           <div className="rounded-[14px] bg-sand/75 px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Fact</p>
+                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Fact</p>
                             <p className="mt-1 text-sm font-semibold text-ink">{entry.billable_hours}</p>
                           </div>
                           <div className="rounded-[14px] bg-sand/75 px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/45">Apr</p>
+                            <p className="text-[11px] uppercase tracking-[0.14em] text-ink/70">Apr</p>
                             <p className="mt-1 text-sm font-semibold text-ink">{entry.approved_hours}</p>
                           </div>
                         </div>
@@ -402,17 +394,17 @@ export default async function ProjectDailyLogPage({
 
                       <div className="mt-4 grid gap-3 md:grid-cols-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.14em] text-ink/45">Tipo</p>
+                          <p className="text-xs uppercase tracking-[0.14em] text-ink/70">Tipo</p>
                           <p className="mt-1 text-sm font-semibold text-ink">{entry.activity_type}</p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.14em] text-ink/45">Plan</p>
+                          <p className="text-xs uppercase tracking-[0.14em] text-ink/70">Plan</p>
                           <p className="mt-1 text-sm font-semibold text-ink">
                             {entry.action_plan_title || "General"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.14em] text-ink/45">Registro</p>
+                          <p className="text-xs uppercase tracking-[0.14em] text-ink/70">Registro</p>
                           <p className="mt-1 text-sm font-semibold text-ink">{formatDateTime(entry.created_at)}</p>
                         </div>
                       </div>
@@ -420,7 +412,7 @@ export default async function ProjectDailyLogPage({
                       {entry.deliverables ? (
                         <div className="mt-4 rounded-[14px] bg-sand/70 px-4 py-3">
                           <p className="text-xs uppercase tracking-[0.14em] text-moss">Entregables</p>
-                          <p className="mt-2 text-sm leading-6 text-ink/72">{entry.deliverables}</p>
+                          <p className="mt-2 text-sm leading-6 text-ink/70">{entry.deliverables}</p>
                         </div>
                       ) : null}
 
@@ -442,24 +434,24 @@ export default async function ProjectDailyLogPage({
                                 <span className="min-w-0 truncate font-semibold">
                                   {evidence.title || evidence.file_name}
                                 </span>
-                                <span className="shrink-0 text-xs text-ink/50">
+                                <span className="shrink-0 text-xs text-ink/70">
                                   {formatDate(evidence.uploaded_at)}
                                 </span>
                               </a>
                             ))}
                           {!entry.evidence_count ? (
-                            <p className="text-sm text-ink/55">
+                            <p className="text-sm text-ink/70">
                               Sin soportes. Opcional para pagos o trazabilidad de horas.
                             </p>
                           ) : null}
-                          <form
+                          <RoleForm allowed={Boolean(workspace.project?.can_edit)}
                             action={createWorklogEvidenceAction}
                             encType="multipart/form-data"
                             className="grid gap-2 md:grid-cols-[1fr_1fr_auto]"
                           >
                             <input type="hidden" name="return_path" value={returnPath} />
                             <input type="hidden" name="worklog" value={entry.id} />
-                            <input name="title" placeholder="Foto, acta o soporte" />
+                            <input aria-label="Título" name="title" placeholder="Foto, acta o soporte" />
                             <input
                               type="file"
                               name="photo"
@@ -478,33 +470,33 @@ export default async function ProjectDailyLogPage({
                               pendingLabel="..."
                               className="w-full md:min-w-[96px]"
                             />
-                          </form>
+                          </RoleForm>
                         </div>
                       </details>
 
-                      {currentUser?.is_staff && entry.status === "REGISTRADO" ? (
+                      {workspace.project?.can_validate && entry.status === "REGISTRADO" ? (
                         <div className="mt-4 grid gap-3 rounded-[14px] border border-signal/12 bg-white/84 p-3 md:grid-cols-[1fr_auto]">
-                          <form action={reviewWorklogAction} className="grid gap-3 md:grid-cols-[120px_1fr_auto]">
+                          <RoleForm allowed={Boolean(workspace.project?.can_validate)} action={reviewWorklogAction} className="grid gap-3 md:grid-cols-[120px_1fr_auto]">
                             <input type="hidden" name="return_path" value={returnPath} />
                             <input type="hidden" name="worklog_id" value={entry.id} />
                             <input type="hidden" name="transition" value="approve" />
-                            <input
+                            <input aria-label="Horas aprobadas"
                               name="approved_hours"
                               type="number"
                               step="0.25"
                               min="0"
                               defaultValue={entry.billable_hours}
                             />
-                            <input name="review_notes" placeholder="Nota" />
+                            <input aria-label="Notas de revisión" name="review_notes" placeholder="Nota" />
                             <SubmitButton label="Aprobar" pendingLabel="..." className="w-full" />
-                          </form>
-                          <form action={reviewWorklogAction}>
+                          </RoleForm>
+                          <RoleForm allowed={Boolean(workspace.project?.can_validate)} action={reviewWorklogAction}>
                             <input type="hidden" name="return_path" value={returnPath} />
                             <input type="hidden" name="worklog_id" value={entry.id} />
                             <input type="hidden" name="transition" value="observe" />
                             <input type="hidden" name="review_notes" value="Requiere ajuste o soporte adicional." />
                             <SubmitButton label="Observar" pendingLabel="..." className="w-full" />
-                          </form>
+                          </RoleForm>
                         </div>
                       ) : null}
                     </article>
@@ -548,7 +540,7 @@ export default async function ProjectDailyLogPage({
                   {workspace.project.company_name} - {workspace.project.standard_name}
                 </p>
               </div>
-              <div className="rounded-[18px] bg-sand px-4 py-3 text-sm text-ink/72">
+              <div className="rounded-[18px] bg-sand px-4 py-3 text-sm text-ink/70">
                 <p className="font-semibold text-ink">Generado</p>
                 <p>{formatDate(today)}</p>
               </div>
@@ -558,7 +550,7 @@ export default async function ProjectDailyLogPage({
           <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             {kpis.map((item) => (
               <div key={`report-${item.label}`} className="rounded-[16px] border border-black/8 bg-sand/55 p-3">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-ink/48">{item.label}</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-ink/70">{item.label}</p>
                 <p className="mt-1 text-xl font-bold text-ink">{item.value}</p>
               </div>
             ))}
@@ -580,7 +572,7 @@ export default async function ProjectDailyLogPage({
                   className="grid gap-3 border-b border-black/7 px-4 py-4 last:border-b-0 md:grid-cols-[92px_1fr_0.7fr_0.7fr_0.7fr]"
                 >
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/45 md:hidden">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/70 md:hidden">
                       {formatDate(entry.work_date)}
                     </p>
                     <p className="font-bold text-ink">{timeRange(entry)}</p>
@@ -591,10 +583,10 @@ export default async function ProjectDailyLogPage({
                       {formatDate(entry.work_date)} - {entry.activity_type}
                     </p>
                     {entry.summary ? (
-                      <p className="mt-2 text-sm leading-6 text-ink/68">{entry.summary}</p>
+                      <p className="mt-2 text-sm leading-6 text-ink/70">{entry.summary}</p>
                     ) : null}
                   </div>
-                  <p className="text-sm text-ink/72">{entry.consultant_username}</p>
+                  <p className="text-sm text-ink/70">{entry.consultant_username}</p>
                   <p className="text-sm font-semibold text-ink">{entry.logged_hours}</p>
                   <p className="text-sm font-semibold text-ink">{entry.status}</p>
                 </div>
@@ -612,7 +604,7 @@ export default async function ProjectDailyLogPage({
         <SectionCard title="Horas por asesor">
           {byConsultant.length ? (
             <div className="overflow-hidden rounded-[18px] border border-black/8 bg-white/82">
-              <div className="hidden grid-cols-[1fr_0.7fr_0.7fr_0.7fr_0.7fr] gap-4 border-b border-black/8 bg-sand/70 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink/48 md:grid">
+              <div className="hidden grid-cols-[1fr_0.7fr_0.7fr_0.7fr_0.7fr] gap-4 border-b border-black/8 bg-sand/70 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink/70 md:grid">
                 <span>Asesor</span>
                 <span>Registros</span>
                 <span>Horas</span>

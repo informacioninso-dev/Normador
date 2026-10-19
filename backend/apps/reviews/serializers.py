@@ -57,6 +57,14 @@ class FindingSerializer(serializers.ModelSerializer):
 
 
 class DocumentReviewSerializer(serializers.ModelSerializer):
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        if request and request.query_params.get("summary") == "true":
+            for name in ("system_prompt_used", "user_prompt_used", "raw_response", "retrieved_context"):
+                fields.pop(name, None)
+        return fields
+
     document_title = serializers.CharField(source="document.title", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
     standard_name = serializers.CharField(source="standard.name", read_only=True)
@@ -83,6 +91,7 @@ class DocumentReviewSerializer(serializers.ModelSerializer):
             "raw_response",
             "retrieved_context",
             "ai_model_used",
+            "provider",
             "created_by",
             "requirement_evaluations",
             "findings",

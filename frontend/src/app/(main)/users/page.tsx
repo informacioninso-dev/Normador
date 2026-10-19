@@ -1,3 +1,5 @@
+import { FormField } from "@/components/form-field";
+import { ActionForm } from "@/components/action-form";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -9,7 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { decodeFlash, getCurrentUser, getUsersData } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 
-export const metadata: Metadata = { title: "Usuarios — Normador" };
+export const metadata: Metadata = { title: "Usuarios — NORMAN AI" };
 
 export default async function UsersPage({
   searchParams,
@@ -31,36 +33,31 @@ export default async function UsersPage({
         title="Nuevo usuario"
         description="Los usuarios administradores (staff) pueden gestionar toda la plataforma."
       >
-        <form action={createUserAction} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <ActionForm action={createUserAction} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+            <FormField label={<>
               Usuario *
-            </label>
-            <input name="username" placeholder="jperez" required />
+            </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="username" placeholder="jperez" required /></FormField>
           </div>
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+            <FormField label={<>
               Contraseña * (mín. 8 caracteres)
-            </label>
-            <input name="password" type="password" placeholder="••••••••" required minLength={8} />
+            </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="password" type="password" placeholder="••••••••" required minLength={8} /></FormField>
           </div>
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+            <FormField label={<>
               Email
-            </label>
-            <input name="email" type="email" placeholder="jperez@empresa.com" />
+            </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="email" type="email" placeholder="jperez@empresa.com" /></FormField>
           </div>
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+            <FormField label={<>
               Nombre
-            </label>
-            <input name="first_name" placeholder="Juan" />
+            </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="first_name" placeholder="Juan" /></FormField>
           </div>
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss">
+            <FormField label={<>
               Apellido
-            </label>
-            <input name="last_name" placeholder="Pérez" />
+            </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="last_name" placeholder="Pérez" /></FormField>
           </div>
           <div className="flex flex-col justify-end">
             <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
@@ -69,7 +66,7 @@ export default async function UsersPage({
             </label>
             <SubmitButton label="Crear usuario" pendingLabel="Creando..." className="w-full" />
           </div>
-        </form>
+        </ActionForm>
       </SectionCard>
 
       <SectionCard
@@ -80,20 +77,20 @@ export default async function UsersPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/8 text-left">
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Usuario</th>
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Email</th>
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Nombre</th>
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Rol</th>
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Estado</th>
-                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Último acceso</th>
-                <th className="pb-3 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Acciones</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Usuario</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Email</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Nombre</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Rol</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Estado</th>
+                <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Último acceso</th>
+                <th className="pb-3 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {users.map((user) => (
                 <tr key={user.id} className="group">
                   <td className="py-4 pr-4 font-semibold text-ink">{user.username}</td>
-                  <td className="py-4 pr-4 text-ink/60">{user.email || "—"}</td>
+                  <td className="py-4 pr-4 text-ink/70">{user.email || "—"}</td>
                   <td className="py-4 pr-4 text-ink/70">
                     {[user.first_name, user.last_name].filter(Boolean).join(" ") || "—"}
                   </td>
@@ -103,7 +100,7 @@ export default async function UsersPage({
                         "rounded-full px-2.5 py-1 text-xs font-semibold",
                         user.is_staff
                           ? "bg-signal/10 text-signal"
-                          : "bg-sand text-ink/60",
+                          : "bg-sand text-ink/70",
                       ].join(" ")}
                     >
                       {user.is_staff ? "Admin" : "Usuario"}
@@ -121,7 +118,7 @@ export default async function UsersPage({
                       {user.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
-                  <td className="py-4 pr-4 text-xs text-ink/45">
+                  <td className="py-4 pr-4 text-xs text-ink/70">
                     {user.last_login ? formatDateTime(user.last_login) : "Nunca"}
                   </td>
                   <td className="py-4">
@@ -132,25 +129,21 @@ export default async function UsersPage({
                           Editar
                         </summary>
                         <div className="absolute z-10 mt-2 w-80 rounded-[20px] border border-black/8 bg-white p-4 shadow-[0_18px_50px_rgba(14,20,32,0.12)]">
-                          <form action={updateUserAction} className="space-y-3">
+                          <ActionForm action={updateUserAction} className="space-y-3">
                             <input type="hidden" name="user_id" value={user.id} />
                             <div>
-                              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss">Email</label>
-                              <input name="email" type="email" defaultValue={user.email} />
+                              <FormField label={<>Email</>} labelClassName="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss"><input name="email" type="email" defaultValue={user.email} /></FormField>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss">Nombre</label>
-                                <input name="first_name" defaultValue={user.first_name} />
+                                <FormField label={<>Nombre</>} labelClassName="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss"><input name="first_name" defaultValue={user.first_name} /></FormField>
                               </div>
                               <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss">Apellido</label>
-                                <input name="last_name" defaultValue={user.last_name} />
+                                <FormField label={<>Apellido</>} labelClassName="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss"><input name="last_name" defaultValue={user.last_name} /></FormField>
                               </div>
                             </div>
                             <div>
-                              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss">Nueva contraseña (dejar en blanco para no cambiar)</label>
-                              <input name="password" type="password" placeholder="••••••••" minLength={8} />
+                              <FormField label={<>Nueva contraseña (dejar en blanco para no cambiar)</>} labelClassName="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-moss"><input name="password" type="password" placeholder="••••••••" minLength={8} /></FormField>
                             </div>
                             <div className="flex gap-4">
                               <label className="flex items-center gap-1.5 text-xs font-semibold text-ink">
@@ -173,18 +166,18 @@ export default async function UsersPage({
                               </label>
                             </div>
                             <SubmitButton label="Guardar" pendingLabel="Guardando..." className="w-full" />
-                          </form>
+                          </ActionForm>
                         </div>
                       </details>
 
                       {user.username !== me.username && (
-                        <form action={deleteUserAction}>
+                        <ActionForm action={deleteUserAction}>
                           <input type="hidden" name="user_id" value={user.id} />
                           <DeleteButton
-                            label="Eliminar"
-                            confirmMessage={`¿Eliminar al usuario "${user.username}"? Esta acción no se puede deshacer.`}
+                            label="Desactivar"
+                            confirmMessage={`¿Desactivar al usuario "${user.username}"? Su historial se conservará.`}
                           />
-                        </form>
+                        </ActionForm>
                       )}
                     </div>
                   </td>
