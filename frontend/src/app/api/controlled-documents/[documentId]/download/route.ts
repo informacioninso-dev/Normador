@@ -6,12 +6,14 @@ import { getAuthHeaders } from "@/lib/auth";
 export async function GET(request: NextRequest, context: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await context.params;
   const version = request.nextUrl.searchParams.get("version") ?? "";
+  const format = request.nextUrl.searchParams.get("format");
+  if (format && !["pdf", "docx", "xlsx"].includes(format)) return NextResponse.json({ detail: "Formato inválido." }, { status: 400 });
   if (!/^[1-9]\d*$/.test(documentId) || !/^[1-9]\d*$/.test(version)) {
     return NextResponse.json({ detail: "Documento o version invalida." }, { status: 400 });
   }
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/controlled-documents/${documentId}/download/?version=${version}`,
+      `${getApiBaseUrl()}/api/controlled-documents/${documentId}/download/?version=${version}${format ? `&file_format=${format}` : ""}`,
       { headers: await getAuthHeaders(), cache: "no-store" },
     );
     if (!response.ok) {

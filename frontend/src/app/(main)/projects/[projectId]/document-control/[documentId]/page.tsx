@@ -20,6 +20,7 @@ export default async function ControlledDocumentPage({ params }: { params: Promi
   if (document.project !== project.id) notFound();
   return <div className="space-y-5">
     <Link href={`/projects/${projectId}/document-control`} className="text-sm font-semibold underline underline-offset-4">Volver al control documental</Link>
+    <Link href={`/companies/${project.company}?view=branding`} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Configurar logo y encabezado para las nuevas versiones</Link>
     <ControlledDocumentEditor document={document} canEdit={project.can_edit} canValidate={project.can_validate} />
   </div>;
 }

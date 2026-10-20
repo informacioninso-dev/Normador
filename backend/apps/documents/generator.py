@@ -6,10 +6,10 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from apps.common.choices import ControlledDocumentKind
+from apps.companies.branding import snapshot_branding
+from apps.documents.presentation import add_word_header, render_pdf, add_excel_header
 
 
 POE_SECTIONS = [
@@ -73,10 +73,12 @@ def validate_content(kind, content):
     return {"columns": columns, "rows": [[c.strip() for c in row] for row in rows]}
 
 
-def render_document(controlled, number, content, *, created_by, approved_by=None, effective_date=None):
+def render_document(controlled, number, content, *, created_by, approved_by=None, effective_date=None,
+                    presentation=None, format=None):
+    presentation = presentation if presentation is not None else snapshot_branding(controlled.project.company)
     approved = approved_by is not None
     metadata = [
-        ("Empresa", controlled.project.company.name),
+        ("Empresa", presentation.get("company_name", controlled.project.company.name)),
         ("Proyecto", controlled.project.name),
         ("Codigo", controlled.code),
         ("Version", f"{number:02d}"),
@@ -91,23 +93,34 @@ def render_document(controlled, number, content, *, created_by, approved_by=None
             ("Aprobado por", approved_by.get_username()),
             ("Fecha de vigencia", effective_date.isoformat()),
         ]
-    suffix = ".docx" if controlled.kind == ControlledDocumentKind.PROCEDURE else ".xlsx"
+    suffix = "." + (format or ("docx" if controlled.kind == ControlledDocumentKind.PROCEDURE else "xlsx"))
+    if suffix == ".pdf":
+        return f"{controlled.code}_v{number:02d}.pdf", render_pdf(controlled.title, content, metadata, presentation)
+    if suffix == ".xlsx" and "columns" not in content:
+        raise ValueError("Este procedimiento se exporta en Word o PDF.")
+    if suffix not in {".docx", ".xlsx"}:
+        raise ValueError("Formato de exportacion no admitido.")
     payload = (
-        _render_word(controlled.title, content, metadata)
-        if suffix == ".docx" else _render_workbook(controlled.title, content, metadata)
+        _render_word(controlled.title, content, metadata, presentation)
+        if suffix == ".docx" else _render_workbook(controlled.title, content, metadata, presentation)
     )
     return f"{controlled.code}_v{number:02d}{suffix}", payload
 
 
-def _render_word(title, content, metadata):
+def _render_word(title, content, metadata, presentation=None):
     doc = WordDocument()
     section = doc.sections[0]
     section.page_width, section.page_height = Cm(21), Cm(29.7)
     section.top_margin, section.bottom_margin = Cm(1.8), Cm(1.8)
     section.left_margin, section.right_margin = Cm(2), Cm(2)
+    if "columns" in content:
+        from docx.enum.section import WD_ORIENT
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width, section.page_height = (Cm(42), Cm(29.7)) if len(content["columns"]) > 10 else (Cm(29.7), Cm(21))
     normal = doc.styles["Normal"]
     normal.font.name, normal.font.size = "Calibri", Pt(11)
     normal.paragraph_format.space_after = Pt(6)
+    add_word_header(doc, presentation or {}, metadata)
     for name in ["Heading 1", "Heading 2"]:
         doc.styles[name].font.color.rgb = RGBColor.from_string("176B61")
     doc.add_heading(title, 0)
@@ -117,10 +130,20 @@ def _render_word(title, content, metadata):
         cells = table.add_row().cells
         cells[0].text, cells[1].text = label, value
     doc.add_paragraph()
-    for index, item in enumerate(content["sections"], 1):
+    for index, item in enumerate(content.get("sections", []), 1):
         doc.add_heading(f"{index}. {item['title']}", 1)
         for line in (item["text"] or "[Pendiente de completar]").splitlines():
             doc.add_paragraph(line)
+    if "columns" in content:
+        table = doc.add_table(rows=1, cols=len(content["columns"]))
+        table.style = "Light Shading Accent 1"
+        for cell, heading in zip(table.rows[0].cells, content["columns"]):
+            cell.text = heading
+        repeat = OxmlElement("w:tblHeader")
+        table.rows[0]._tr.get_or_add_trPr().append(repeat)
+        for row in content["rows"]:
+            for cell, value in zip(table.add_row().cells, row):
+                cell.text = value
     footer = section.footer.paragraphs[0]
     footer.add_run(f"{dict(metadata)['Codigo']} | v{dict(metadata)['Version']} | Pagina ")
     field = OxmlElement("w:fldSimple")
@@ -140,36 +163,10 @@ def _literal_cell(sheet, row, column, value):
     return cell
 
 
-def _render_workbook(title, content, metadata):
+def _render_workbook(title, content, metadata, presentation=None):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Contenido"
-    column_count = len(content["columns"])
-    last_column = get_column_letter(column_count)
-    sheet.merge_cells(start_row=1, start_column=1, end_row=2, end_column=column_count)
-    cell = _literal_cell(sheet, 1, 1, title)
-    cell.font = Font(name="Calibri", size=16, bold=True, color="176B61")
-    sheet.row_dimensions[1].height = 26
-    for i, heading in enumerate(content["columns"], 1):
-        _literal_cell(sheet, 4, i, heading)
-        sheet.column_dimensions[get_column_letter(i)].width = 25
-    rows = content["rows"] or [[""] * column_count for _ in range(10)]
-    for i, row in enumerate(rows, 5):
-        sheet.row_dimensions[i].height = 32
-        for j, value in enumerate(row, 1):
-            _literal_cell(sheet, i, j, value)
-    table = Table(displayName="TablaDocumento", ref=f"A4:{last_column}{4 + len(rows)}")
-    table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
-    sheet.add_table(table)
-    sheet.freeze_panes = "A5"
-    sheet.sheet_view.showGridLines = False
-    sheet.print_title_rows = "1:4"
-    sheet.print_options.horizontalCentered = True
-    sheet.page_setup.orientation = "landscape"
-    sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
-    sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight = 1, 0
-    sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    sheet.print_area = f"A1:{last_column}{4 + len(rows)}"
     control = workbook.create_sheet("Control documental")
     control.column_dimensions["A"].width = 25
     control.column_dimensions["B"].width = 65
@@ -180,6 +177,7 @@ def _render_workbook(title, content, metadata):
     control.sheet_view.showGridLines = False
     workbook.properties.title = title
     workbook.properties.creator = dict(metadata)["Elaborado por"]
+    add_excel_header(sheet, title, dict(metadata), presentation or {}, content["columns"], content["rows"])
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()

@@ -2,6 +2,9 @@ from apps.companies.api_access import CompanyScopedViewMixin
 from django.db import IntegrityError
 from django.db.models import Prefetch
 from django.http import FileResponse
+from io import BytesIO
+from pathlib import Path
+import hashlib
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -16,6 +19,7 @@ from apps.documents.control_serializers import (
     DocumentControlTransitionSerializer, NewDocumentRevisionSerializer,
 )
 from apps.documents.models import ControlledDocument, DocumentControlEvent, DocumentRevision
+from apps.documents.generator import render_document
 
 
 class ControlledDocumentViewSet(CompanyScopedViewMixin,
@@ -95,6 +99,25 @@ class ControlledDocumentViewSet(CompanyScopedViewMixin,
         if revision is None:
             return Response({"detail": "Version no encontrada."}, status=404)
         artifact = revision.released_file or revision.document.file
+        format = request.query_params.get("file_format")
+        if format and format not in {"pdf", "docx", "xlsx"}:
+            return Response({"detail": "Formato no admitido."}, status=400)
+        if format and Path(artifact.name).suffix.lower() != f".{format}":
+            if revision.source != "PLANTILLA":
+                return Response({"detail": "La conversion esta disponible para documentos generados en NORMAN. Descarga el archivo original."}, status=400)
+            try:
+                filename, payload = render_document(
+                    controlled, revision.number, revision.content, created_by=revision.created_by,
+                    approved_by=revision.approved_by, effective_date=revision.effective_date,
+                    presentation=revision.presentation_snapshot, format=format,
+                )
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=400)
+            response = FileResponse(BytesIO(payload), as_attachment=True, filename=filename)
+            response["Cache-Control"] = "private, no-store"
+            response["X-Document-State"] = revision.status
+            response["X-Document-SHA256"] = hashlib.sha256(payload).hexdigest()
+            return response
         response = FileResponse(artifact.open("rb"), as_attachment=True, filename=artifact.name.rsplit("/", 1)[-1])
         response["Cache-Control"] = "private, no-store"
         response["X-Document-State"] = revision.status

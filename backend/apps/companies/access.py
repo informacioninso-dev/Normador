@@ -89,7 +89,7 @@ def scope_queryset(queryset, user, roles=None, *, allow_global=True):
 
 
 def roles_for_action(action):
-    if action in {"list", "retrieve", "download", "progress_report", "semantic_search", "processing_jobs"}:
+    if action in {"list", "retrieve", "download", "progress_report", "export_report", "semantic_search", "processing_jobs"}:
         return None
     if action in {
         "validate_evidence",

@@ -1,6 +1,8 @@
 import { FormField } from "@/components/form-field";
 import { ActionForm } from "@/components/action-form";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { canManageCompany, canPrepareCompany } from "@/lib/access";
 
 import { createProjectAction, deleteProjectAction } from "@/app/actions";
 import { DeleteButton } from "@/components/delete-button";
@@ -9,7 +11,7 @@ import { FlashBanner } from "@/components/flash-banner";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
-import { decodeFlash, getCurrentUser, getProjectsData } from "@/lib/api";
+import { decodeFlash, getProjectsData } from "@/lib/api";
 import {
   computeDocumentaryProgress,
   computeImplementationProgress,
@@ -21,7 +23,7 @@ import type { ActionPlan, ChecklistItem, Company, Project, Standard } from "@/li
 type ProjectsView = "empresa" | "estado" | "lista" | "nuevo";
 
 const projectViews: Array<{ key: Exclude<ProjectsView, "nuevo">; label: string }> = [
-  { key: "empresa", label: "Empresas" },
+  { key: "empresa", label: "Por empresa" },
   { key: "estado", label: "Estado" },
   { key: "lista", label: "Lista" },
 ];
@@ -128,13 +130,11 @@ function CompanyBoard({
   projects,
   checklistItems,
   actionPlans,
-  canDelete,
 }: {
   companies: Company[];
   projects: Project[];
   checklistItems: ChecklistItem[];
   actionPlans: ActionPlan[];
-  canDelete: boolean;
 }) {
   if (!companies.length && !projects.length) {
     return (
@@ -161,7 +161,7 @@ function CompanyBoard({
                   className="truncate text-lg font-bold text-ink"
                   style={{ fontFamily: "var(--font-display)" }}
                 >
-                  {company.name}
+                  <Link href={`/companies/${company.id}`} className="text-signal underline">{company.name}</Link>
                 </h3>
                 <p className="mt-1 text-xs uppercase tracking-[0.16em] text-moss">
                   {companyProjects.length} proyectos
@@ -177,7 +177,7 @@ function CompanyBoard({
                     project={project}
                     checklistItems={checklistItems}
                     actionPlans={actionPlans}
-                    canDelete={canDelete}
+                    canDelete={canManageCompany(company)}
                   />
                 ))
               ) : (
@@ -197,12 +197,12 @@ function StatusBoard({
   projects,
   checklistItems,
   actionPlans,
-  canDelete,
+  manageableCompanyIds,
 }: {
   projects: Project[];
   checklistItems: ChecklistItem[];
   actionPlans: ActionPlan[];
-  canDelete: boolean;
+  manageableCompanyIds: number[];
 }) {
   return (
     <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-2">
@@ -226,7 +226,7 @@ function StatusBoard({
                     project={project}
                     checklistItems={checklistItems}
                     actionPlans={actionPlans}
-                    canDelete={canDelete}
+                    canDelete={manageableCompanyIds.includes(project.company)}
                   />
                 ))
               ) : (
@@ -295,98 +295,22 @@ function ProjectTable({
   );
 }
 
-function CreateProjectForm({
-  companies,
-  standards,
-  defaultCompany,
-}: {
+function CreateProjectForm({ companies, standards, defaultCompany }: {
   companies: Company[];
   standards: Standard[];
   defaultCompany?: string;
 }) {
-  return (
-    <ActionForm action={createProjectAction} className="grid gap-4 lg:grid-cols-2">
-      <input type="hidden" name="return_path" value="/projects?view=nuevo" />
-      <input type="hidden" name="success_return_path" value="/projects" />
-      <input type="hidden" name="status" value="PLANNING" />
-
-      <div>
-        <FormField label={<>
-          Empresa existente
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="company" defaultValue={defaultCompany ?? ""}>
-          <option value="">
-            {companies.length ? "Selecciona una empresa" : "No hay empresas cargadas"}
-          </option>
-          {companies.map((company) => (
-            <option key={company.id} value={company.id}>
-              {company.name}
-            </option>
-          ))}
-        </select></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Norma
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="standard" required defaultValue="">
-          <option value="" disabled>
-            Selecciona una norma
-          </option>
-          {standards.map((standard) => (
-            <option key={standard.id} value={standard.id}>
-              {standard.name}
-            </option>
-          ))}
-        </select></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Empresa nueva
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_name" placeholder="Laboratorio Andino" /></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          RUC
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_ruc" placeholder="0999999999001" /></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Industria
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="company_industry" placeholder="Opcional" /></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Nombre
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="name" placeholder="Implementacion ISO 13485 - Planta Norte" required /></FormField>
-      </div>
-
-      <div className="lg:col-span-2">
-        <FormField label={<>
-          Alcance
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><textarea name="scope" placeholder="Procesos, sedes o areas incluidas." required /></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Inicio
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="start_date" /></FormField>
-      </div>
-
-      <div>
-        <FormField label={<>
-          Meta
-        </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="target_date" /></FormField>
-      </div>
-
-      <div className="lg:col-span-2">
-        <SubmitButton label="Crear proyecto" pendingLabel="Creando..." className="w-full" />
-      </div>
-    </ActionForm>
-  );
+  const selected = companies.find((company) => String(company.id) === defaultCompany);
+  return <ActionForm action={createProjectAction} className="grid gap-4 md:grid-cols-2">
+    <input type="hidden" name="status" value="PLANNING" />
+    {selected ? <div className="md:col-span-2"><input type="hidden" name="company" value={selected.id} /><p className="text-sm">Empresa cliente: <strong>{selected.name}</strong></p><p className="mt-1 text-sm text-ink/70">El equipo y los permisos de esta empresa se aplicarán al proyecto.</p></div> : <FormField label="Empresa cliente"><select name="company" required defaultValue=""><option value="" disabled>Selecciona la empresa existente</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></FormField>}
+    <FormField label="Norma"><select name="standard" required defaultValue=""><option value="" disabled>Selecciona la norma</option>{standards.filter((standard) => standard.is_active).map((standard) => <option key={standard.id} value={standard.id}>{standard.name}</option>)}</select></FormField>
+    <FormField label="Nombre del proyecto"><input name="name" required maxLength={255} placeholder="Implementación ISO 13485 — Planta Norte" /></FormField>
+    <div className="md:col-span-2"><FormField label="Alcance"><textarea name="scope" required placeholder="Procesos, sedes o áreas incluidas." /></FormField></div>
+    <FormField label="Fecha de inicio (opcional)"><input name="start_date" type="date" /></FormField>
+    <FormField label="Fecha objetivo (opcional)"><input name="target_date" type="date" /></FormField>
+    <div className="md:col-span-2"><SubmitButton label="Crear proyecto y continuar" pendingLabel="Creando proyecto..." /></div>
+  </ActionForm>;
 }
 
 export default async function ProjectsPage({
@@ -398,20 +322,31 @@ export default async function ProjectsPage({
   const flash = decodeFlash(query);
   const activeView = selectedView(query.view);
   const defaultCompany = Array.isArray(query.company) ? query.company[0] : query.company;
-  const [data, user] = await Promise.all([getProjectsData(), getCurrentUser()]);
+  const data = await getProjectsData();
+  const company = defaultCompany ? data.companies.find((item) => String(item.id) === defaultCompany) : undefined;
+  if (defaultCompany && !company && !data.errors.length) notFound();
+  const companies = company ? [company] : data.companies;
+  const projects = company ? data.projects.filter((project) => project.company === company.id) : data.projects;
+  const writableCompanies = companies.filter((item) => item.is_active && canPrepareCompany(item));
+  const companyQuery = company ? `&company=${company.id}` : "";
+  const backPath = company ? `/companies/${company.id}` : "/projects";
 
   return (
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || data.errors[0]} />
 
+      <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div><h1 className="text-3xl font-bold">{company ? `Proyectos de ${company.name}` : "Todos los proyectos"}</h1><p className="mt-2 max-w-3xl text-sm text-ink/70">{company ? "El equipo y sus permisos se gestionan desde esta empresa." : "Vista general de las empresas a las que tienes acceso. Para trabajar con un cliente, abre su empresa."}</p></div>
+        {activeView === "nuevo" ? <Link href={backPath} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Volver</Link> : <Link href={company ? `/companies/${company.id}` : "/companies"} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">{company ? "Abrir empresa" : "Elegir empresa cliente"}</Link>}
+      </header>
       <SectionCard
-        title="Proyectos"
-        action={
+        title={activeView === "nuevo" ? "Crear proyecto" : "Proyectos"}
+        action={activeView !== "nuevo" ?
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
             {projectViews.map((view) => (
               <Link
                 key={view.key}
-                href={`/projects?view=${view.key}`}
+                href={`/projects?view=${view.key}${companyQuery}`}
                 className={[
                   "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition",
                   activeView === view.key
@@ -422,39 +357,34 @@ export default async function ProjectsPage({
                 {view.label}
               </Link>
             ))}
-          </div>
+            {writableCompanies.length > 0 && <Link href={`/projects?view=nuevo${companyQuery}`} className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-signal px-4 py-2 text-sm font-semibold text-white">Crear proyecto</Link>}
+          </div> : undefined
         }
       >
-        {activeView === "nuevo" ? (
-          <CreateProjectForm
-            companies={data.companies}
-            standards={data.standards}
-            defaultCompany={defaultCompany}
-          />
-        ) : null}
+        {activeView === "nuevo" ? writableCompanies.length ? <CreateProjectForm companies={writableCompanies} standards={data.standards} defaultCompany={defaultCompany} /> : <div className="space-y-3"><p className="text-sm text-ink/70">No hay una empresa activa en la que puedas crear proyectos. El responsable de la empresa puede revisar tu acceso.</p><Link href="/companies" className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Volver a empresas cliente</Link></div> : null}
+        {activeView === "nuevo" && !company && <p className="mt-5 text-sm text-ink/70">¿Es un cliente nuevo? <Link href="/companies?view=new" className="font-semibold text-signal underline">Registra primero su empresa</Link> y después crea el proyecto aquí.</p>}
 
         {activeView === "empresa" ? (
           <CompanyBoard
-            companies={data.companies}
-            projects={data.projects}
+            companies={companies}
+            projects={projects}
             checklistItems={data.checklistItems}
             actionPlans={data.actionPlans}
-            canDelete={Boolean(user?.is_staff)}
           />
         ) : null}
 
         {activeView === "estado" ? (
           <StatusBoard
-            projects={data.projects}
+            projects={projects}
             checklistItems={data.checklistItems}
             actionPlans={data.actionPlans}
-            canDelete={Boolean(user?.is_staff)}
+            manageableCompanyIds={companies.filter(canManageCompany).map((item) => item.id)}
           />
         ) : null}
 
         {activeView === "lista" ? (
           <ProjectTable
-            projects={data.projects}
+            projects={projects}
             checklistItems={data.checklistItems}
             actionPlans={data.actionPlans}
           />

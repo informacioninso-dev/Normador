@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { decodeFlash, getProjectWorkspace } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
+import { taskLabel } from "@/lib/workflow";
 
 const reviewTypes = [
   "REVISION_DOCUMENTAL",
@@ -37,7 +38,7 @@ export default async function ProjectReviewsPage({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId, ["documents","reviews","checklistItems"]);
+  const workspace = await getProjectWorkspace(projectId, ["documents","reviews","checklistItems","requirements"]);
 
   if (!workspace.project) {
     notFound();
@@ -45,21 +46,26 @@ export default async function ProjectReviewsPage({
 
   const returnPath = `/projects/${projectId}/reviews`;
   const readyDocuments = workspace.documents.filter((document) => document.status === "LISTO");
+  const requirementId = typeof query.requirement === "string" ? query.requirement : "";
+  const selectedDocument = readyDocuments.find((document) => String(document.id) === query.document);
+  const visibleReviews = workspace.reviews.filter((review) => !requirementId || review.requirement_evaluations.some((result) => String(result.requirement) === requirementId));
+  const selectedRequirement = workspace.checklistItems.find((item) => String(item.requirement) === requirementId);
+
 
   return (
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
 
       <SectionCard
-        title="Revision documental y normativa"
+        title="Historial de revisiones documentales"
         description="Selecciona un documento para comprobar sus requisitos. NORMAN guardará las citas, los faltantes y los hallazgos; podrás consultar el estado sin esperar en esta pantalla."
-        action={
+        action={workspace.project.can_edit ? <details open={Boolean(selectedDocument)}><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Solicitar una revisión documental</summary>
           <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={runReviewAction} className="space-y-3">
-            <input type="hidden" name="return_path" value={returnPath} />
+            <input type="hidden" name="return_path" value={returnPath} /><input type="hidden" name="all_requirement_ids" value={workspace.requirements.map((requirement) => requirement.id).join(",")} />
             <div>
               <FormField label={<>
                 Documento listo
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="document" required defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="document" required defaultValue={selectedDocument?.id ?? ""}>
                 <option value="" disabled>
                   Selecciona documento
                 </option>
@@ -70,24 +76,27 @@ export default async function ProjectReviewsPage({
                 ))}
               </select></FormField>
             </div>
-            <div>
+            <div><FormField label="Requisito que quieres comprobar"><select name="requirement" required defaultValue={requirementId || selectedDocument?.requirement || ""}><option value="" disabled>Selecciona una cláusula o requisito</option><option value="all">Todos los requisitos de la norma ({workspace.requirements.length})</option>{workspace.requirements.map((requirement) => <option key={requirement.id} value={requirement.id}>{requirement.clause} · {requirement.title}</option>)}</select></FormField></div>
+            <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Cambiar el objetivo de la revisión</summary>
               <FormField label={<>
-                Tipo de revision
+                Tipo de revisión
               </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="review_type" defaultValue="CUMPLIMIENTO_NORMATIVO">
                 {reviewTypes.map((value) => (
                   <option key={value} value={value}>
-                    {value.replaceAll("_", " ")}
+                    {taskLabel(value)}
                   </option>
                 ))}
               </select></FormField>
-            </div>
-            <SubmitButton label="Ejecutar revision" pendingLabel="Revisando..." className="w-full" />
-          </RoleForm>
+            </details>
+            <SubmitButton label="Revisar el requisito seleccionado" pendingLabel="Revisando..." className="w-full" />
+          </RoleForm></details> : undefined
         }
       >
         <div className="space-y-4">
+          {selectedRequirement && <Link href={`/projects/${projectId}/checklist?item=${selectedRequirement.id}&step=review`} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Volver a la ficha de {selectedRequirement.clause} · {selectedRequirement.title}</Link>}
+          {requirementId && <Link href={returnPath} className="ml-3 inline-flex min-h-11 items-center text-sm text-signal underline">Ver todas las revisiones del proyecto</Link>}
           {workspace.documents.filter((document) => document.latest_job?.operation === "REVIEW" || document.latest_job?.review_after_processing).map((document) => <div key={document.id} className="rounded-xl border border-black/15 p-4"><p role="status">{document.title} · {({ PENDING: "En cola", RUNNING: "Revisando", RETRY: "Reintentando", SUCCESS: "Revisión completada", FAILED: "No se completó la revisión" })[document.latest_job!.status]}</p>{document.latest_job?.error && <p role="alert">{document.latest_job.error}</p>}<ProcessingRefresh active={["PENDING", "RUNNING", "RETRY"].includes(document.latest_job!.status)} /></div>)}
-          {workspace.reviews.map((review) => (
+          {visibleReviews.map((review) => (
             <article
               key={review.id}
               id={`review-${review.id}`}
@@ -192,7 +201,7 @@ export default async function ProjectReviewsPage({
               </div>
             </article>
           ))}
-          {!workspace.reviews.length ? (
+          {!visibleReviews.length ? (
             <EmptyState
               title="Sin revisiones ejecutadas"
               description="Cuando haya documentos en estado LISTO podras disparar revisiones desde esta misma vista."

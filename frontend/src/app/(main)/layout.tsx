@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { NormanAssistant } from "@/components/norman-assistant";
 import Link from "next/link";
 
 import { BrandLockup } from "@/components/brand-lockup";
@@ -37,25 +39,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="no-print ui-surface mb-4 hidden rounded-[22px] px-3 py-3 backdrop-blur md:mb-6 md:rounded-[28px] md:px-5 md:py-4 lg:block">
-            <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
-              <Link
-                href="/companies"
-                className="ui-pill rounded-full px-4 py-3 text-center text-sm font-semibold text-ink transition hover:bg-[#edf3ff] md:py-2"
-              >
-                Nueva empresa
-              </Link>
-              <Link
-                href="/projects?view=nuevo"
-                className="rounded-full bg-signal px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_12px_28px_rgba(79,126,217,0.24)] transition hover:bg-signal/90 md:py-2"
-              >
-                Nuevo proyecto
-              </Link>
-            </div>
-          </header>
-          <main id="main-content" tabIndex={-1} className="pb-8 print-area">{children}</main>
+          <main id="main-content" tabIndex={-1} className="pb-28 print-area">{children}</main>
         </div>
       </div>
+      <Suspense fallback={null}><NormanAssistant /></Suspense>
     </div>
   );
 }

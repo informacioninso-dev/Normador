@@ -259,6 +259,7 @@ class DocumentRevision(TimeStampedModel):
         default=DocumentRevisionStatus.DRAFT,
     )
     content = models.JSONField(default=dict, blank=True)
+    presentation_snapshot = models.JSONField(default=dict, blank=True)
     source = models.CharField(max_length=16, default="PLANTILLA")
     content_hash = models.CharField(max_length=64)
     change_summary = models.TextField()

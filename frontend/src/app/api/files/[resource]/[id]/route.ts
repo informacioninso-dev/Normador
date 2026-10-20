@@ -4,7 +4,7 @@ import { getApiBaseUrl } from "@/lib/api";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ resource: string; id: string }> }) {
   const { resource, id } = await context.params;
-  if (!["documents", "evidences", "worklog-evidences"].includes(resource) || !/^\d+$/.test(id)) {
+  if (!["companies", "documents", "evidences", "worklog-evidences"].includes(resource) || !/^\d+$/.test(id)) {
     return NextResponse.json({ detail: "Archivo no encontrado." }, { status: 404 });
   }
   const response = await fetch(`${getApiBaseUrl()}/api/${resource}/${id}/download/`, {

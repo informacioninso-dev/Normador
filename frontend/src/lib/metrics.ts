@@ -40,22 +40,8 @@ export function computeImplementationProgress(checklistItems: ChecklistItem[]): 
   if (!checklistItems.length) {
     return 0;
   }
-  const score = checklistItems.reduce((sum, item) => {
-    if (item.requires_real_evidence) {
-      if (CLOSURE_DONE_STATUSES.has(item.status)) {
-        return sum + 100;
-      }
-      if (IMPLEMENTATION_DONE_STATUSES.has(item.status)) {
-        return sum + 90;
-      }
-      if (item.status === "VALIDADO_DOCUMENTALMENTE") {
-        return sum + 55;
-      }
-      return sum + Math.min(item.progress_percentage, 50);
-    }
-    return sum + item.progress_percentage;
-  }, 0);
-  return Math.round(score / checklistItems.length);
+  // Mirrors the backend report; only its persisted states establish implementation.
+  return Math.round(checklistItems.filter((item) => IMPLEMENTATION_DONE_STATUSES.has(item.status)).length * 100 / checklistItems.length);
 }
 
 export function projectChecklist(project: Project, checklistItems: ChecklistItem[]) {

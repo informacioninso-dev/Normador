@@ -30,6 +30,11 @@ export default async function HomePage({
     <div className="space-y-6">
       <FlashBanner success={flash.success} error={flash.error || data.errors[0]} />
 
+      <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div><h1 className="text-3xl font-bold">Resumen general</h1><p className="mt-2 text-sm text-ink/70">Avance conjunto de las empresas cliente a las que tienes acceso.</p></div>
+        <Link href="/companies" className="inline-flex min-h-11 items-center rounded-xl bg-signal px-4 py-2 text-sm font-semibold text-white">Elegir empresa cliente</Link>
+      </header>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard eyebrow="Proyectos activos" value={data.projects.length} />
         <StatCard eyebrow="Documental" value={`${portfolio.documentaryProgress}%`} />

@@ -1,181 +1,49 @@
-import { FormField } from "@/components/form-field";
-import { RoleForm } from "@/components/role-form";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-
-import { uploadDocumentAction, reprocessDocumentAction } from "@/app/actions";
-import { ProcessingRefresh } from "@/components/processing-refresh";
-import { NormanAvatar } from "@/components/norman-avatar";
-import { EmptyState } from "@/components/empty-state";
+import { reprocessDocumentAction } from "@/app/actions";
+import { ActionForm } from "@/components/action-form";
+import { DocumentIntakeForm } from "@/components/document-intake-form";
 import { FlashBanner } from "@/components/flash-banner";
+import { ProcessingRefresh } from "@/components/processing-refresh";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { decodeFlash, getProjectWorkspace } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
+import { activeJobStates, taskLabel } from "@/lib/workflow";
 
-const documentTypes = [
-  "POLITICA",
-  "PROCEDIMIENTO",
-  "FORMATO",
-  "REGISTRO",
-  "MATRIZ",
-  "INFORME",
-  "ACTA",
-  "EVIDENCIA",
-  "OTRO",
-];
-
-export default async function ProjectDocumentsPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ projectId: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const routeParams = await params;
-  const query = await searchParams;
-  const flash = decodeFlash(query);
-  const projectId = Number(routeParams.projectId);
-
-  if (!Number.isFinite(projectId)) {
-    notFound();
-  }
-
-  const workspace = await getProjectWorkspace(projectId, ["requirements","documents"], true);
-
-  if (!workspace.project) {
-    notFound();
-  }
-
-  const returnPath = `/projects/${projectId}/documents`;
-
-  return (
-    <div className="space-y-6">
-      <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
-
-      <SectionCard
-        title="Cargar documento"
-        description="Sube el archivo y el sistema extrae el texto, genera chunks y embeddings automaticamente."
-        action={
-          <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={uploadDocumentAction} className="space-y-3" encType="multipart/form-data">
-            <input type="hidden" name="return_path" value={returnPath} />
-            <input type="hidden" name="project" value={projectId} />
-            <div>
-              <FormField label={<>
-                Titulo (opcional)
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input name="title" placeholder="Procedimiento de control documental" /></FormField>
-            </div>
-            <div>
-              <FormField label={<>
-                Tipo de documento
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="document_type" required defaultValue="PROCEDIMIENTO">
-                {documentTypes.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select></FormField>
-            </div>
-            <div>
-              <FormField label={<>
-                Requisito (opcional)
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="requirement" defaultValue="">
-                <option value="">Sin requisito especifico</option>
-                {workspace.requirements.map((req) => (
-                  <option key={req.id} value={req.id}>
-                    {req.clause} — {req.title}
-                  </option>
-                ))}
-              </select></FormField>
-            </div>
-            <div>
-              <FormField label={<>
-                Archivo (pdf, docx, xlsx, txt)
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="file" name="file" accept=".pdf,.docx,.xlsx,.txt" required /></FormField>
-            </div>
-            <SubmitButton label="Cargar y procesar" pendingLabel="Procesando..." className="w-full" />
-          </RoleForm>
-        }
-      >
-        <div className="space-y-3">
-          {workspace.documents.length ? (
-            workspace.documents.map((document) => (
-              <article
-                key={document.id}
-                id={`document-${document.id}`}
-                className="rounded-[26px] border border-black/8 bg-white/78 p-5"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="max-w-3xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                      {document.document_type} · {document.file_extension?.toUpperCase() || ""}
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold text-ink">{document.title}</h3>
-                    <p className="mt-2 text-xs uppercase tracking-[0.14em] text-ink/70">
-                      {document.requirement_title || "Sin requisito"} ·{" "}
-                      {formatDateTime(document.uploaded_at)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <StatusBadge value={document.status} />
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Chunks</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">{document.chunk_count}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Archivo</p>
-                    <a href={document.file} className="mt-1 inline-block text-sm font-semibold text-moss underline underline-offset-4">{document.file_name}</a>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-ink/70">Error</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {document.latest_job?.error || document.processing_error || "—"}
-                    </p>
-                  </div>
-                </div>
-
-                {document.latest_job && (
-                  <div className="mt-4 flex items-center gap-2.5" role="status">
-                    <NormanAvatar className="h-9 w-9" mood={document.latest_job.status === "FAILED" ? "attention" : document.latest_job.status === "SUCCESS" ? "ready" : "working"} />
-                    <p className="text-sm text-ink">
-                      <span className="font-semibold">NORMAN</span> · {({ PENDING: "En cola", RUNNING: "Procesando documento", RETRY: "Reintentando procesamiento", SUCCESS: "Procesamiento completado", FAILED: "No se pudo completar el procesamiento" })[document.latest_job.status]}
-                      {document.latest_job.attempts > 1 ? ` · Intento ${document.latest_job.attempts}` : ""}
-                    </p>
-                  </div>
-                )}
-                <ProcessingRefresh active={Boolean(document.latest_job && ["PENDING", "RUNNING", "RETRY"].includes(document.latest_job.status))} />
-                {document.latest_job?.status === "FAILED" && workspace.project?.can_edit && (
-                  <RoleForm allowed action={reprocessDocumentAction} className="mt-3">
-                    <input type="hidden" name="return_path" value={returnPath} />
-                    <input type="hidden" name="document" value={document.id} />
-                    <SubmitButton label="Reintentar procesamiento" pendingLabel="Solicitando..." />
-                  </RoleForm>
-                )}
-                {document.extracted_text && (
-                  <div className="mt-4 rounded-[18px] bg-sand/75 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-                      Texto extraido
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-ink/70">
-                      {document.extracted_text.slice(0, 400)}
-                      {document.extracted_text.length > 400 ? "…" : ""}
-                    </p>
-                  </div>
-                )}
-              </article>
-            ))
-          ) : (
-            <EmptyState
-              title="No hay documentos"
-              description="Sube el primero para activar el flujo de revision normativa."
-            />
-          )}
-        </div>
-      </SectionCard>
-    </div>
-  );
+export default async function ProjectDocumentsPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [{ projectId: rawId }, query] = await Promise.all([params, searchParams]);
+  const projectId = Number(rawId);
+  if (!Number.isSafeInteger(projectId) || projectId < 1) notFound();
+  const workspace = await getProjectWorkspace(projectId, ["requirements", "documents", "checklistItems"], true);
+  if (!workspace.project) notFound();
+  const project = workspace.project;
+  const flash = decodeFlash(query), path = `/projects/${projectId}/documents`;
+  const intake = query.view === "upload";
+  const search = typeof query.q === "string" ? query.q.trim().toLocaleLowerCase("es") : "";
+  const documents = workspace.documents.filter((document) => `${document.title} ${document.requirement_title}`.toLocaleLowerCase("es").includes(search)).sort((a, b) => Number(String(b.id) === query.document) - Number(String(a.id) === query.document));
+  return <div className="space-y-5">
+    <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
+    {intake ? <SectionCard title="Revisar un documento que ya tienes" description="Selecciona el archivo y el requisito que quieres comprobar. NORMAN guardará el soporte y preparará su revisión." action={<Link href={path} className="inline-flex min-h-11 items-center text-sm text-signal underline">Volver a los documentos</Link>}>
+      {project.can_edit ? <DocumentIntakeForm projectId={projectId} requirements={workspace.requirements} /> : <p className="text-sm text-ink/70">La carga y la solicitud de revisión corresponden al responsable o implementador de la empresa.</p>}
+    </SectionCard> : <SectionCard title="Documentos del proyecto" description="Consulta los archivos y continúa con el requisito al que pertenecen." action={project.can_edit ? <Link href={`${path}?view=upload`} className="inline-flex min-h-11 items-center rounded-xl bg-signal px-4 py-3 text-sm font-semibold text-white">Cargar un documento existente</Link> : undefined}>
+      <form method="GET" className="mb-5 flex flex-wrap items-end gap-3"><div className="min-w-0 flex-1"><label htmlFor="document-search" className="mb-2 block text-sm font-semibold">Buscar documento o requisito</label><input id="document-search" name="q" type="search" defaultValue={typeof query.q === "string" ? query.q : ""} /></div><button type="submit" className="min-h-11 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white">Buscar</button></form>
+      <div className="divide-y divide-ink/10">{documents.map((document) => {
+        const item = workspace.checklistItems.find((candidate) => candidate.id === document.checklist_item || candidate.requirement === document.requirement);
+        const job = document.latest_job;
+        const active = activeJobStates.includes(job?.status ?? "");
+        return <article key={document.id} id={`document-${document.id}`} className="space-y-3 py-5 scroll-mt-4">
+          <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="break-words text-lg font-semibold">{document.title}</h3><StatusBadge value={document.status} /></div>
+          <p className="text-sm text-ink/70">{taskLabel(document.document_type)} · {formatDateTime(document.uploaded_at)}</p><p className="text-sm">{document.requirement_title || "Documento guardado sin requisito asociado"}</p>
+          {job && <div className="rounded-xl bg-sand p-3"><p role="status" className="text-sm font-semibold">{({ PENDING: "En espera para procesar", RUNNING: "NORMAN está procesando este documento", RETRY: "Se está reintentando el procesamiento", SUCCESS: job.operation === "REVIEW" || job.review_after_processing ? "Procesamiento y revisión completados" : "Documento preparado para revisar", FAILED: "El procesamiento no se completó" })[job.status]}</p>{job.error && <p role="alert" className="mt-2 text-sm">{job.error}</p>}<ProcessingRefresh active={active} /></div>}
+          <div className="flex flex-wrap gap-4"><a href={`/api/files/documents/${document.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Abrir archivo (nueva pestaña)</a>{item ? <Link href={`/projects/${projectId}/checklist?item=${item.id}&step=${active ? "documents" : "review"}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">{active ? "Abrir ficha del requisito" : "Ver resultado y continuar con el requisito"}</Link> : document.status === "LISTO" && <Link href={`/projects/${projectId}/reviews?document=${document.id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Elegir un requisito para revisar</Link>}</div>
+          {(document.status === "FALLIDO" || job?.status === "FAILED") && project.can_edit && !active && <ActionForm action={reprocessDocumentAction}><input type="hidden" name="document" value={document.id} /><input type="hidden" name="return_path" value={`${path}?document=${document.id}`} /><SubmitButton label="Reintentar procesamiento" pendingLabel="Solicitando reintento..." /></ActionForm>}
+          <details><summary className="min-h-11 cursor-pointer py-3 text-sm text-ink/70">Consultar el texto extraído y los datos de procesamiento</summary><p className="text-sm text-ink/70">{document.chunk_count} fragmentos de texto preparados · {document.file_name}</p><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-sand p-3 text-sm">{document.extracted_text || "Todavía no hay texto extraído disponible."}</pre></details>
+        </article>;
+      })}</div>
+      {!documents.length && <p className="py-5 text-sm text-ink/70">{search ? "No hay coincidencias para esa búsqueda." : "Todavía no hay documentos. Puedes cargar uno existente o empezar por los criterios de un requisito."}</p>}
+      <Link href={`/projects/${projectId}/checklist`} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Trabajar desde los requisitos</Link>
+    </SectionCard>}
+  </div>;
 }

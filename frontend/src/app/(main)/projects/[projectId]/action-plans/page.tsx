@@ -1,6 +1,7 @@
 import { FormField } from "@/components/form-field";
 import { RoleForm } from "@/components/role-form";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { createActionPlanAction, transitionActionPlanAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
@@ -27,17 +28,20 @@ export default async function ProjectActionPlansPage({
     notFound();
   }
 
-  const workspace = await getProjectWorkspace(projectId, ["actionPlans","requirements"]);
+  const workspace = await getProjectWorkspace(projectId, ["actionPlans","requirements","checklistItems"]);
 
   if (!workspace.project) {
     notFound();
   }
 
-  const returnPath = `/projects/${projectId}/action-plans`;
-  const openPlans = workspace.actionPlans.filter(
+  const requirementId = typeof query.requirement === "string" ? query.requirement : "";
+  const returnPath = `/projects/${projectId}/action-plans${requirementId ? `?requirement=${encodeURIComponent(requirementId)}` : ""}`;
+  const visiblePlans = workspace.actionPlans.filter((plan) => !requirementId || String(plan.requirement) === requirementId);
+  const selectedItem = workspace.checklistItems.find((item) => String(item.requirement) === requirementId);
+  const openPlans = visiblePlans.filter(
     (plan) => !["CERRADO", "SUPERSEDIDO"].includes(plan.status),
   );
-  const closedPlans = workspace.actionPlans.filter((plan) =>
+  const closedPlans = visiblePlans.filter((plan) =>
     ["CERRADO", "SUPERSEDIDO"].includes(plan.status),
   );
 
@@ -46,16 +50,16 @@ export default async function ProjectActionPlansPage({
       <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
 
       <SectionCard
-        title="Nuevo plan de accion"
+        title="Acciones correctivas y pendientes"
         description="Registra un pendiente directamente si no fue generado automaticamente desde una revision."
-        action={
+        action={workspace.project.can_edit ? <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Registrar una acción adicional</summary>
           <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={createActionPlanAction} className="space-y-3">
             <input type="hidden" name="return_path" value={returnPath} />
             <input type="hidden" name="project" value={projectId} />
             <div>
               <FormField label={<>
                 Requisito
-              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="requirement" defaultValue="">
+              </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><select name="requirement" defaultValue={requirementId}>
                 <option value="">Sin requisito especifico</option>
                 {workspace.requirements.map((req) => (
                   <option key={req.id} value={req.id}>
@@ -80,14 +84,17 @@ export default async function ProjectActionPlansPage({
               </>} labelClassName="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-moss"><input type="date" name="due_date" /></FormField>
             </div>
             <SubmitButton label="Crear plan" pendingLabel="Guardando..." className="w-full" />
-          </RoleForm>
+          </RoleForm></details> : undefined
         }
       >
         <div className="space-y-3">
+          {selectedItem && <Link href={`/projects/${projectId}/checklist?item=${selectedItem.id}&step=review`} className="inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Volver a la ficha de {selectedItem.clause} · {selectedItem.title}</Link>}
+          {requirementId && <Link href={`/projects/${projectId}/action-plans`} className="ml-3 inline-flex min-h-11 items-center text-sm text-signal underline">Ver todas las acciones del proyecto</Link>}
           {openPlans.length ? (
             openPlans.map((plan) => (
               <article
                 key={plan.id}
+                id={`plan-${plan.id}`}
                 className="rounded-[26px] border border-black/8 bg-white/78 p-5"
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -135,7 +142,7 @@ export default async function ProjectActionPlansPage({
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  {plan.status === "PENDIENTE" && (
+                  {plan.status === "PENDIENTE" && workspace.project?.can_edit && (
                     <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
@@ -143,20 +150,20 @@ export default async function ProjectActionPlansPage({
                       <SubmitButton label="Iniciar" pendingLabel="..." />
                     </RoleForm>
                   )}
-                  {plan.status === "EN_PROGRESO" && (
+                  {plan.status === "EN_PROGRESO" && workspace.project?.can_edit && (
                     <RoleForm allowed={Boolean(workspace.project?.can_edit)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
                       <input type="hidden" name="transition" value="resolve" />
-                      <SubmitButton label="Resolver" pendingLabel="..." />
+                      <SubmitButton label="Registrar acción realizada" pendingLabel="..." />
                     </RoleForm>
                   )}
-                  {plan.status === "RESUELTO" && (
+                  {plan.status === "RESUELTO" && workspace.project?.can_validate && (
                     <RoleForm allowed={Boolean(workspace.project?.can_validate)} action={transitionActionPlanAction}>
                       <input type="hidden" name="return_path" value={returnPath} />
                       <input type="hidden" name="action_plan_id" value={plan.id} />
                       <input type="hidden" name="transition" value="close_plan" />
-                      <SubmitButton label="Cerrar" pendingLabel="..." />
+                      <SubmitButton label="Validar cierre de la acción" pendingLabel="..." />
                     </RoleForm>
                   )}
                 </div>

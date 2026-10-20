@@ -59,7 +59,7 @@ export async function loginAction(formData: FormData) {
     maxAge: 60 * 60 * 24 * 30,
   });
 
-  redirect("/");
+  redirect("/companies");
 }
 
 export async function logoutAction() {

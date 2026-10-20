@@ -11,6 +11,7 @@ from apps.common.choices import (
 from apps.documents.extractor import extract_document
 from apps.documents.generator import initial_content, render_document, validate_content
 from apps.documents.models import ControlledDocument, Document, DocumentControlEvent, DocumentRevision
+from apps.companies.branding import snapshot_branding
 from apps.implementation.services import recalculate_checklist_item_state
 
 
@@ -56,6 +57,7 @@ def _locked_document(controlled, expected_version):
 
 
 def _create_revision(controlled, *, number, user, change_summary, content=None, upload=None):
+    presentation = snapshot_branding(controlled.project.company)
     if upload:
         suffix = Path(upload.name).suffix.lower()
         expected = ".docx" if controlled.kind == ControlledDocumentKind.PROCEDURE else ".xlsx"
@@ -67,7 +69,7 @@ def _create_revision(controlled, *, number, user, change_summary, content=None, 
         content, source = {}, "ARCHIVO"
     else:
         content = validate_content(controlled.kind, content)
-        file_name, payload = render_document(controlled, number, content, created_by=user)
+        file_name, payload = render_document(controlled, number, content, created_by=user, presentation=presentation)
         source = "PLANTILLA"
     document = Document(
         project=controlled.project, requirement=controlled.requirement,
@@ -87,6 +89,7 @@ def _create_revision(controlled, *, number, user, change_summary, content=None, 
         revision = DocumentRevision.objects.create(
             controlled_document=controlled, document=document, number=number, content=content,
             source=source, content_hash=hashlib.sha256(payload).hexdigest(),
+            presentation_snapshot=presentation,
             change_summary=change_summary, created_by=user,
         )
     except Exception:
@@ -167,6 +170,7 @@ def transition_document(controlled, *, user, expected_version, action, notes="",
             file_name, payload = render_document(
                 controlled, revision.number, revision.content, created_by=revision.created_by,
                 approved_by=user, effective_date=revision.effective_date,
+                presentation=revision.presentation_snapshot,
             )
             revision.released_file.save(file_name, ContentFile(payload), save=False)
             revision.released_hash = hashlib.sha256(payload).hexdigest()

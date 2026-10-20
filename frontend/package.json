@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:workflow": "node tests/workflow.test.cjs"
   },
   "dependencies": {
     "lucide-react": "^1.49.0",

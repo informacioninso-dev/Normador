@@ -51,6 +51,9 @@ export interface ControlledDocument {
 }
 
 export interface Company {
+  has_logo: boolean;
+  document_header: { title?: string; subtitle?: string; footer?: string };
+  created_by: number | null;
   is_active: boolean;
   my_role: "ADMINISTRADOR" | "RESPONSABLE" | "IMPLEMENTADOR" | "AUDITOR" | "LECTOR";
   id: number;
@@ -68,6 +71,9 @@ export interface CompanyMembership {
   username: string;
   role: "RESPONSABLE" | "IMPLEMENTADOR" | "AUDITOR" | "LECTOR";
   is_active: boolean;
+  user_is_active: boolean;
+  user_is_staff: boolean;
+  is_owner: boolean;
 }
 
 export interface Standard {

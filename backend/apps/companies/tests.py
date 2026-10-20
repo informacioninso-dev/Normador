@@ -120,6 +120,33 @@ class CompanyBoundaryTests(APITestCase):
         self.client.force_authenticate(self.other)
         self.assertEqual(self.client.get(f"/api/projects/{self.project.pk}/").status_code, 404)
 
+    def test_company_project_filter_preserves_client_boundary(self):
+        response = self.client.get("/api/projects/", {"company": self.company.pk})
+        self.assertEqual([row["id"] for row in response.data], [self.project.pk])
+        response = self.client.get("/api/projects/", {"company": self.foreign.pk})
+        self.assertEqual(response.data, [])
+        self.client.force_authenticate(self.other)
+        response = self.client.get("/api/projects/", {"company": self.foreign.pk})
+        self.assertEqual([row["id"] for row in response.data], [self.foreign_project.pk])
+
+    def test_archived_company_preserves_projects_but_rejects_new_ones(self):
+        self.company.is_active = False
+        self.company.save(update_fields=["is_active"])
+        response = self.client.post("/api/projects/", {"company": self.company.pk, "standard": self.standard.pk, "name": "New project"}, format="json")
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(self.client.get(f"/api/projects/{self.project.pk}/").status_code, 200)
+        self.assertFalse(Project.objects.filter(company=self.company, name="New project").exists())
+
+    def test_membership_can_be_disabled_after_account_deactivation(self):
+        user = self.members[CompanyRole.READER]
+        member = CompanyMembership.objects.get(company=self.company, user=user)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        response = self.client.patch(f"/api/company-memberships/{member.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["user_is_active"])
+        self.assertFalse(response.data["is_owner"])
+
     def test_private_references_and_semantic_search_do_not_cross_company(self):
         private = Document.objects.create(is_reference=True, library_company=self.foreign, library_standard=self.standard, title="Private", file="private.txt", status="LISTO")
         DocumentChunk.objects.create(document=private, chunk_index=0, content="secret", content_hash="p", embedding=[1.0, 0.0], embedding_vector=[1.0, 0.0], embedding_dimensions=2, embedding_provider="mock", embedding_model="test", embedding_status="LISTO")

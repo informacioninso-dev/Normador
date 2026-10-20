@@ -1,52 +1,47 @@
-import { ActionForm } from "@/components/action-form";
+import Link from "next/link";
+
 import { saveMembershipAction } from "@/app/actions";
+import { ActionForm } from "@/components/action-form";
+import { FormField } from "@/components/form-field";
 import { SectionCard } from "@/components/section-card";
 import { SubmitButton } from "@/components/submit-button";
-import type { Company, CompanyMembership } from "@/lib/types";
+import { canManageCompany, companyRoleLabel, companyRoles } from "@/lib/access";
+import type { AppUser, Company, CompanyMembership } from "@/lib/types";
 
-const roles = [
-  ["RESPONSABLE", "Responsable"], ["IMPLEMENTADOR", "Implementador"],
-  ["AUDITOR", "Auditor"], ["LECTOR", "Lector"],
-];
+export function CompanyAccess({ company, memberships, users = [] }: { company: Company; memberships: CompanyMembership[]; users?: AppUser[] }) {
+  if (!canManageCompany(company)) return null;
+  const returnPath = `/companies/${company.id}?view=team`;
+  const availableUsers = users.filter((user) => user.is_active && !user.is_staff && !memberships.some((member) => member.username === user.username));
+  const staff = company.my_role === "ADMINISTRADOR";
 
-export function CompanyAccess({ companies, memberships }: { companies: Company[]; memberships: CompanyMembership[] }) {
-  const managed = companies.filter((company) => ["ADMINISTRADOR", "RESPONSABLE"].includes(company.my_role));
-  if (!managed.length) return null;
-  return (
-    <SectionCard title="Acceso por empresa" description="Asigna acceso a una cuenta existente. El responsable gestiona el equipo; el implementador prepara documentos y acciones; el auditor valida; el lector consulta.">
-      <ActionForm action={saveMembershipAction} className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div>
-          <label htmlFor="access-company" className="mb-2 block text-sm font-semibold">Empresa</label>
-          <select id="access-company" name="company" required>{managed.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select>
-        </div>
-        <div>
-          <label htmlFor="access-username" className="mb-2 block text-sm font-semibold">Nombre de usuario</label>
-          <input id="access-username" name="username" required maxLength={150} autoComplete="off" aria-describedby="access-help" />
-        </div>
-        <div>
-          <label htmlFor="access-role" className="mb-2 block text-sm font-semibold">Rol</label>
-          <select id="access-role" name="role" defaultValue="LECTOR">{roles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        </div>
-        <SubmitButton label="Dar acceso" pendingLabel="Guardando..." />
-      </ActionForm>
-      <p id="access-help" className="mt-3 text-sm text-ink/80">Un administrador crea la cuenta en Usuarios. Dar acceso aquí no envía invitaciones.</p>
-      {memberships.length ? (
-        <div className="mt-6 divide-y divide-black/10">
-          {memberships.map((membership) => (
-            <ActionForm key={membership.id} action={saveMembershipAction} className="grid items-center gap-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <input type="hidden" name="membership_id" value={membership.id} />
-              <input type="hidden" name="company" value={membership.company} />
-              <input type="hidden" name="username" value={membership.username} />
-              <div className="min-w-0 break-words"><strong>{membership.username}</strong><p className="text-sm text-ink/80">{membership.company_name}</p></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label htmlFor={`role-${membership.id}`} className="mb-1 block text-sm">Rol</label><select id={`role-${membership.id}`} name="role" defaultValue={membership.role}>{roles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-                <div><label htmlFor={`active-${membership.id}`} className="mb-1 block text-sm">Acceso</label><select id={`active-${membership.id}`} name="is_active" defaultValue={String(membership.is_active)}><option value="true">Activo</option><option value="false">Desactivado</option></select></div>
-              </div>
-              <SubmitButton label="Guardar acceso" pendingLabel="Guardando..." />
-            </ActionForm>
-          ))}
-        </div>
-      ) : <p className="mt-5 text-sm">Aún no hay accesos adicionales. Asigna una cuenta y su rol.</p>}
-    </SectionCard>
-  );
+  return <SectionCard title={`Equipo de ${company.name}`} description="El rol se aplica a todos los proyectos de esta empresa. La misma cuenta puede tener otro rol en otra empresa cliente.">
+    <p className="max-w-3xl text-sm text-ink/70">Los administradores globales ya pueden acceder a todas las empresas; no necesitan un acceso adicional. Desactivar un acceso aquí afecta solo a esta empresa.</p>
+    <details className="my-4 border-b border-ink/10 pb-3"><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Qué permite cada rol</summary><ul className="space-y-2 text-sm text-ink/80">{companyRoles.map((role) => <li key={role.value}><strong>{role.label}:</strong> {role.description}</li>)}</ul></details>
+
+    <div className="divide-y divide-ink/10">{memberships.map((member) => <article key={member.id} className="py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="break-words font-semibold">{member.username}</h3><p className="text-sm text-ink/70">{member.user_is_staff ? "Administrador global" : companyRoleLabel(member.role)} · {!member.user_is_active ? "Cuenta desactivada" : member.is_active ? "Acceso activo" : "Acceso desactivado"}</p></div>
+      {member.is_owner || member.user_is_staff ? <p className="mt-2 text-sm text-ink/70">{member.user_is_staff ? "Su cuenta tiene acceso global a NORMAN. Se administra desde Usuarios y accesos." : "Es propietario de la empresa y conserva el rol Responsable."}</p> : <details className="mt-2">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center py-2 text-sm font-semibold text-signal">Cambiar acceso de {member.username}</summary>
+        <ActionForm action={saveMembershipAction} className="mt-3 grid items-end gap-4 md:grid-cols-[1fr_1fr_auto]">
+          <input type="hidden" name="membership_id" value={member.id} /><input type="hidden" name="return_path" value={returnPath} />
+          <FormField label="Rol en esta empresa"><select name="role" defaultValue={member.role}>{companyRoles.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></FormField>
+          <FormField label="Acceso a esta empresa"><select name="is_active" defaultValue={String(member.is_active)}><option value="true">Activo</option><option value="false">Desactivado</option></select></FormField>
+          <SubmitButton label="Guardar acceso" pendingLabel="Guardando..." />
+        </ActionForm>
+        {!member.user_is_active && <p className="mt-2 text-sm text-ink/70">La cuenta está desactivada en toda la plataforma. Cambiar este acceso no reactiva la cuenta.</p>}
+      </details>}
+    </article>)}</div>
+    {!memberships.length && <p className="py-4 text-sm text-ink/70">No hay miembros asignados. Los administradores globales conservan su acceso.</p>}
+
+    <details className="mt-5 border-t border-ink/10 pt-3"><summary className="min-h-11 cursor-pointer py-3 font-semibold">Añadir una cuenta existente al equipo</summary>
+      {staff && !availableUsers.length ? <p className="mt-3 text-sm text-ink/70">Todas las cuentas ordinarias activas ya están asignadas. Puedes reactivar un acceso existente o crear otra cuenta.</p> : <ActionForm action={saveMembershipAction} className="mt-3 grid items-end gap-4 md:grid-cols-[1fr_1fr_auto]">
+        <input type="hidden" name="company" value={company.id} /><input type="hidden" name="return_path" value={returnPath} />
+        <FormField label={staff ? "Cuenta" : "Nombre de usuario existente"}>{staff ? <select name="username" required defaultValue=""><option value="" disabled>Selecciona una persona</option>{availableUsers.map((user) => <option key={user.id} value={user.username}>{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.username} ({user.username})</option>)}</select> : <input name="username" required maxLength={150} autoComplete="off" />}</FormField>
+        <FormField label="Rol en esta empresa"><select name="role" defaultValue="LECTOR">{companyRoles.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></FormField>
+        <SubmitButton label="Dar acceso a esta empresa" pendingLabel="Guardando..." />
+      </ActionForm>}
+      <p className="mt-3 text-sm text-ink/70">Esta operación no crea una cuenta ni envía invitaciones. Si ya pertenece al equipo, cambia su acceso en la lista anterior.</p>
+    </details>
+    {staff ? <Link href={`/users?view=new&company=${company.id}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-signal underline">Crear cuenta y dar acceso a esta empresa</Link> : <p className="mt-4 text-sm text-ink/70">Si la persona todavía no tiene cuenta, un administrador global debe crearla.</p>}
+  </SectionCard>;
 }

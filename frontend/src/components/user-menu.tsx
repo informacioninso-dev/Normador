@@ -16,7 +16,7 @@ export function UserMenu({ username, isStaff }: Props) {
     <div className="flex items-center gap-3">
       <div className="text-right">
         <p className="text-xs font-semibold text-ink">{username}</p>
-        {isStaff ? <p className="text-[11px] text-ink/70">Admin</p> : null}
+        <p className="text-[11px] text-ink/70">{isStaff ? "Administrador global" : "Acceso por empresa"}</p>
       </div>
       <button
         onClick={() => startTransition(() => logoutAction())}

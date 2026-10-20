@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
+from unittest.mock import patch
+
+from apps.companies.models import Company, CompanyMembership, CompanyRole
 
 
 class AuthenticationTests(APITestCase):
@@ -80,3 +83,60 @@ class AuthenticationTests(APITestCase):
         self.user.is_staff = True
         self.user.save(update_fields=["is_staff"])
         self.assertEqual(self.client.get("/api/users/").status_code, 200)
+
+
+class AccountCompanySetupTests(APITestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(username="admin-qa", is_staff=True)
+        self.company = Company.objects.create(name="Client A", ruc="QA-CLIENT-A", created_by=self.admin)
+        self.client.force_authenticate(self.admin)
+
+    def payload(self, **extra):
+        return {"username": "new-consultant", "password": "QA-distinct-passphrase-742!", **extra}
+
+    def test_create_account_with_first_company_access(self):
+        response = self.client.post("/api/users/", self.payload(company=self.company.pk, role=CompanyRole.IMPLEMENTER), format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        user = get_user_model().objects.get(username="new-consultant")
+        self.assertEqual(response.data["id"], user.pk)
+        self.assertTrue(user.check_password("QA-distinct-passphrase-742!"))
+        self.assertFalse(user.is_staff)
+        self.assertTrue(CompanyMembership.objects.filter(user=user, company=self.company, role=CompanyRole.IMPLEMENTER, is_active=True).exists())
+        self.assertNotIn("password", response.data)
+
+    def test_invalid_or_archived_company_does_not_create_account(self):
+        self.company.is_active = False
+        self.company.save(update_fields=["is_active"])
+        for company_id in (self.company.pk, self.company.pk + 10000):
+            response = self.client.post("/api/users/", self.payload(company=company_id, role=CompanyRole.READER), format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertFalse(get_user_model().objects.filter(username="new-consultant").exists())
+
+    def test_membership_failure_rolls_back_account(self):
+        from apps.accounts.serializers import UserCreateSerializer
+        serializer = UserCreateSerializer(data=self.payload(company=self.company.pk, role=CompanyRole.READER))
+        serializer.is_valid(raise_exception=True)
+        with patch("apps.accounts.serializers.CompanyMembership.objects.create", side_effect=RuntimeError("QA assignment failure")):
+            with self.assertRaises(RuntimeError):
+                serializer.save()
+        self.assertFalse(get_user_model().objects.filter(username="new-consultant").exists())
+
+    def test_account_role_requires_company_and_global_admin_has_no_company_role(self):
+        for payload in (
+            self.payload(role=CompanyRole.MANAGER),
+            self.payload(company=self.company.pk, role=CompanyRole.MANAGER, is_staff=True),
+        ):
+            response = self.client.post("/api/users/", payload, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(get_user_model().objects.filter(username="new-consultant").exists())
+        response = self.client.post("/api/users/", self.payload(), format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_non_admin_cannot_create_accounts_or_grant_global_access(self):
+        for role in CompanyRole.values:
+            user = get_user_model().objects.create_user(username=f"member-{role}")
+            CompanyMembership.objects.create(company=self.company, user=user, role=role)
+            self.client.force_authenticate(user)
+            response = self.client.post("/api/users/", self.payload(company=self.company.pk, role=role, is_staff=True), format="json")
+            self.assertEqual(response.status_code, 403, response.data)
+        self.assertFalse(get_user_model().objects.filter(username="new-consultant").exists())

@@ -30,7 +30,7 @@ export default async function ProjectEvidencePage({ params, searchParams }: {
   const url = (nextPage: number) => `${returnPath}?${new URLSearchParams({ status, requirement, page: String(nextPage) })}`;
   return <div className="space-y-6">
     <FlashBanner success={flash.success} error={flash.error || workspace.errors[0]} />
-    <SectionCard title="Registrar evidencia" description="Adjunta el soporte real. Un auditor o responsable revisará su contenido antes de validarlo. Las correcciones se conservan como nuevas evidencias.">
+    {workspace.project.can_edit && <SectionCard title="Registrar evidencia" description="Adjunta el soporte real. Un auditor o responsable revisará su contenido antes de validarlo. Las correcciones se conservan como nuevas evidencias.">
       <RoleForm allowed={workspace.project.can_edit} action={createEvidenceAction} className="grid gap-4 md:grid-cols-2">
         <input type="hidden" name="return_path" value={returnPath} /><input type="hidden" name="project" value={projectId} />
         <div><FormField label={<>Requisito</>}><select name="requirement" defaultValue={requirement}><option value="">Sin requisito específico</option>{workspace.requirements.map((item) => <option key={item.id} value={item.id}>{item.clause} · {item.title}</option>)}</select></FormField></div>
@@ -41,7 +41,7 @@ export default async function ProjectEvidencePage({ params, searchParams }: {
         <div><FormField label={<>Descripción y contexto</>}><textarea name="description" /></FormField></div>
         <SubmitButton label="Registrar evidencia" pendingLabel="Guardando..." />
       </RoleForm>
-    </SectionCard>
+    </SectionCard>}
     <SectionCard title="Evidencias e historial" description="Abre el soporte y revisa su relación con el requisito. Una evidencia rechazada sigue disponible en el historial.">
       <form method="get" className="mb-5 grid gap-3 md:grid-cols-3">
         <div><label htmlFor="evidence-status">Estado</label><select id="evidence-status" name="status" defaultValue={status}><option value="">Todos</option><option value="CARGADA">Pendientes de revisión</option><option value="VALIDADA">Validadas</option><option value="RECHAZADA">Rechazadas</option></select></div>

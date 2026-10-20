@@ -161,20 +161,9 @@ def _compute_implementation_progress(checklist_items) -> int:
     if not checklist_items:
         return 0
 
-    score = 0
-    for item in checklist_items:
-        if item.requirement.requires_real_evidence:
-            if item.status == ChecklistStatus.CLOSED:
-                score += 100
-            elif item.status == ChecklistStatus.IMPLEMENTED:
-                score += 90
-            elif item.status == ChecklistStatus.DOCUMENT_VALIDATED:
-                score += 55
-            else:
-                score += min(item.progress_percentage, 50)
-        else:
-            score += item.progress_percentage
-    return round(score / len(checklist_items))
+    # Documentary progress cannot stand in for validated real implementation.
+    completed = sum(item.status in IMPLEMENTATION_DONE_STATUSES for item in checklist_items)
+    return round(completed * 100 / len(checklist_items))
 
 
 def _build_process_area_summary(checklist_items) -> list[dict]:

@@ -44,7 +44,7 @@ export default async function DocumentControlPage({ params, searchParams }: {
         </Link>
       </header>
 
-      <details open={!documents.length} className="border-b border-stone-200 pb-5">
+      <details open={!documents.length || query.view === "new"} className="border-b border-stone-200 pb-5">
         <summary className="flex w-fit cursor-pointer list-none items-center gap-2 text-sm font-semibold text-emerald-800">
           <Plus size={18} /> Nuevo documento
         </summary>
@@ -52,9 +52,9 @@ export default async function DocumentControlPage({ params, searchParams }: {
           <input type="hidden" name="project" value={projectId} />
           <label className="dc-label">Tipo
             <select name="kind" defaultValue="POE" required>
-              <option value="POE">POE - Word</option>
-              <option value="MATRIZ">Matriz - Excel</option>
-              <option value="FORMATO">Formato - Excel</option>
+              <option value="POE">POE - Word / PDF</option>
+              <option value="MATRIZ">Matriz - Excel / Word / PDF</option>
+              <option value="FORMATO">Formato - Excel / Word / PDF</option>
             </select>
           </label>
           <label className="dc-label">Codigo

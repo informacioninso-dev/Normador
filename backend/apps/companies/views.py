@@ -2,6 +2,8 @@ from rest_framework import viewsets, mixins
 from rest_framework.response import Response
 from django.db import transaction
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
+from django.http import FileResponse
 
 from apps.companies.models import Company, CompanyMembership, CompanyRole
 from apps.companies.serializers import CompanySerializer, CompanyMembershipSerializer
@@ -32,6 +34,16 @@ class CompanyViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
         company.is_active = False
         company.save(update_fields=["is_active", "updated_at"])
         return Response(status=204)
+
+    @action(detail=True, methods=["get"])
+    def download(self, request, pk=None):
+        company = self.get_object()
+        if not company.logo:
+            return Response({"detail": "La empresa todavía no tiene logo."}, status=404)
+        response = FileResponse(company.logo.open("rb"), content_type="image/png", filename="logo.png")
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 class CompanyMembershipViewSet(CompanyScopedViewMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin,

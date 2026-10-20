@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { ProjectTabs } from "@/components/project-tabs";
 import { StatusBadge } from "@/components/status-badge";
@@ -30,44 +31,16 @@ export default async function ProjectLayout({
 
   return (
     <div className="space-y-5">
+      <nav aria-label="Ubicación" className="flex flex-wrap items-center gap-2 text-sm text-ink/70">
+        <Link href="/companies" className="inline-flex min-h-11 items-center text-signal underline">Empresas cliente</Link>
+        <span aria-hidden="true">/</span>
+        <Link href={`/companies/${project.company}`} className="inline-flex min-h-11 items-center break-words text-signal underline">{project.company_name}</Link>
+        <span aria-hidden="true">/</span><span aria-current="page">{project.name}</span>
+        <Link href={`/companies/${project.company}?view=team`} className="ml-auto inline-flex min-h-11 items-center font-semibold text-signal underline">Equipo y acceso de la empresa</Link>
+      </nav>
       <section className="ui-surface rounded-[28px] px-4 pt-4 pb-0 md:px-5 md:pt-5">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-moss">
-                {project.company_name}
-              </span>
-              <StatusBadge value={project.status} />
-            </div>
-            <h1
-              className="mt-1.5 text-3xl font-bold leading-tight text-ink md:text-4xl"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {project.name}
-            </h1>
-            {project.scope && (
-              <p className="mt-1 text-sm leading-6 text-ink/70 line-clamp-2">
-                {project.scope}
-              </p>
-            )}
-          </div>
-
-          {/* Stats strip */}
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {[
-              { label: "Norma", value: project.standard_name },
-              { label: "Documental", value: summary ? `${summary.documentary_progress_percentage}%` : "—" },
-              { label: "Implementación", value: summary ? `${summary.implementation_progress_percentage}%` : "—" },
-              { label: "Meta", value: formatDate(project.target_date) },
-            ].map((stat) => (
-              <div key={stat.label} className="ui-muted min-w-[90px] rounded-[18px] px-4 py-3 text-center">
-                <p className="text-xs uppercase tracking-[0.16em] text-ink/70">{stat.label}</p>
-                <p className="mt-1 text-sm font-bold text-ink">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h1 className="break-words text-2xl font-bold text-ink md:text-3xl">{project.name}</h1><p className="mt-2 text-sm text-ink/70">{project.standard_name}</p></div><StatusBadge value={project.status} /></div>
+        <details className="mt-2"><summary className="min-h-11 cursor-pointer py-3 text-sm text-ink/70">Alcance y fechas del proyecto</summary><p className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{project.scope || "Sin alcance adicional registrado."}</p><p className="mt-2 text-sm text-ink/70">Fecha objetivo: {formatDate(project.target_date)}</p></details>
 
         {/* Tabs */}
         <div className="mt-4">

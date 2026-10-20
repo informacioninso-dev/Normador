@@ -5,16 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef } from "react";
 
 const projectTabs = [
-  { href: "", label: "Implementación" },
-  { href: "/checklist", label: "Checklist" },
-  { href: "/documents", label: "Documentos" },
-  { href: "/reviews", label: "Revisiones" },
-  { href: "/action-plans", label: "Planes de acción" },
-  { href: "/evidence", label: "Evidencias" },
-  { href: "/document-control", label: "Control documental" },
-  { href: "/daily-log", label: "Registro diario" },
-  { href: "/tracking", label: "Seguimiento" },
-  { href: "/report", label: "Informe" },
+  { href: "", label: "Matriz de avance", group: "work" },
+  { href: "/checklist", label: "Requisitos", group: "work" },
+  { href: "/action-plans", label: "Acciones correctivas", group: "work" },
+  { href: "/evidence", label: "Evidencias y validación", group: "work" },
+  { href: "/report", label: "Informe de avance", group: "work" },
+  { href: "/documents", label: "Archivo de documentos", group: "tools" },
+  { href: "/reviews", label: "Historial de revisiones", group: "tools" },
+  { href: "/document-control", label: "Documentos controlados", group: "tools" },
+  { href: "/daily-log", label: "Bitácora de trabajo", group: "tools" },
+  { href: "/tracking", label: "Seguimiento de actividades", group: "tools" },
 ];
 
 export function ProjectTabs({ projectId }: { projectId: number }) {
@@ -49,7 +49,7 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
           className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3 hover:bg-[#edf3ff] [&::-webkit-details-marker]:hidden"
         >
           <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="text-ink/70">Secciones del proyecto</span>
+            <span className="text-ink/70">Ir a otra tarea del proyecto</span>
             <span className="font-semibold text-ink">{currentSection?.label ?? "Seleccionar sección"}</span>
           </span>
           <svg
@@ -65,8 +65,10 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
             <path d="m6 9 6 6 6-6" />
           </svg>
         </summary>
-        <div id={panelId} className="grid gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-3">
-          {projectTabs.map((tab) => {
+        <div id={panelId} className="space-y-4 pt-3">
+          {["work", "tools"].map((group) => <div key={group}>
+            <p className="mb-2 text-sm font-semibold text-ink/70">{group === "work" ? "Trabajo del proyecto" : "Herramientas e historial"}</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{projectTabs.filter((tab) => tab.group === group).map((tab) => {
             const href = `${basePath}${tab.href}`;
             const active = isActive(tab.href);
 
@@ -91,7 +93,7 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
                 {tab.label}
               </Link>
             );
-          })}
+          })}</div></div>)}
         </div>
       </details>
     </nav>

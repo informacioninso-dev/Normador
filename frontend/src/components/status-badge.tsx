@@ -42,7 +42,7 @@ const statusLabels: Record<string, string> = {
   VIGENTE: "Vigente",
   OBSOLETO: "Obsoleto",
   ARCHIVADO: "Archivado",
-  PLANNING: "Planificacion",
+  PLANNING: "Planificación",
   ACTIVE: "Activo",
   ON_HOLD: "En pausa",
   COMPLETED: "Completado",
@@ -51,10 +51,10 @@ const statusLabels: Record<string, string> = {
   APROBADO: "Aprobado",
   NO_INICIADO: "No iniciado",
   PENDIENTE_DOCUMENTAL: "Pendiente documental",
-  EN_REVISION: "En revision",
-  CUMPLE_PARCIAL: "Cumple parcial",
+  EN_REVISION: "En revisión",
+  CUMPLE_PARCIAL: "Cumplimiento parcial",
   OBSERVADO: "Observado",
-  VALIDADO_DOCUMENTALMENTE: "Validado documental",
+  VALIDADO_DOCUMENTALMENTE: "Documentación validada",
   IMPLEMENTADO: "Implementado",
   CERRADO: "Cerrado",
   CARGADO: "Cargado",
@@ -76,7 +76,7 @@ const statusLabels: Record<string, string> = {
   ALTO: "Alto",
 };
 
-function humanize(value: string) {
+export function statusLabel(value: string) {
   if (statusLabels[value]) {
     return statusLabels[value];
   }
@@ -103,7 +103,7 @@ export function StatusBadge({
         className,
       ].join(" ")}
     >
-      {humanize(value)}
+      {statusLabel(value)}
     </span>
   );
 }

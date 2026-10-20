@@ -2,12 +2,15 @@ from django.conf import settings
 from django.db import models
 
 from apps.common.models import TimeStampedModel
+from apps.companies.branding import logo_upload_to
 
 
 class Company(TimeStampedModel):
     name = models.CharField(max_length=255)
     ruc = models.CharField(max_length=32, unique=True)
     industry = models.CharField(max_length=255, blank=True)
+    logo = models.FileField(upload_to=logo_upload_to, blank=True, max_length=500)
+    document_header = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

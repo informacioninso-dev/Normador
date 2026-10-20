@@ -42,6 +42,8 @@ class ProjectSerializer(CompanyRelationsMixin, serializers.ModelSerializer):
     standard_name = serializers.CharField(source="standard.name", read_only=True)
 
     def validate_company(self, company):
+        if not self.instance and not company.is_active:
+            raise serializers.ValidationError("La empresa está archivada. Crea el proyecto en una empresa activa.")
         if self.instance and self.instance.company_id != company.pk:
             raise serializers.ValidationError("La empresa de un proyecto existente no se puede cambiar.")
         request = self.context.get("request")

@@ -44,17 +44,17 @@ function ensureReturnPath(formData: FormData) {
 
 export async function saveMembershipAction(formData: FormData) {
   const id = textValue(formData, "membership_id");
+  const returnPath = ensureReturnPath(formData);
   try {
     await apiJsonMutation(`/api/company-memberships/${id ? `${id}/` : ""}`, id ? "PATCH" : "POST", {
-      company: numberValue(formData, "company"),
-      username: textValue(formData, "username"),
+      ...(id ? {} : { company: numberValue(formData, "company"), username: textValue(formData, "username") }),
       role: textValue(formData, "role"),
       is_active: formData.get("is_active") !== "false",
     });
   } catch (error) {
     return formFailure(error);
   }
-  redirectWithMessage("/companies", "success", "Acceso actualizado.");
+  redirectWithMessage(returnPath, "success", "Acceso a esta empresa actualizado.");
 }
 
 export async function confirmNotApplicableAction(formData: FormData) {
@@ -73,48 +73,46 @@ export async function confirmNotApplicableAction(formData: FormData) {
 }
 
 export async function createCompanyAction(formData: FormData) {
-  const returnPath = ensureReturnPath(formData);
-
+  let companyId: number;
   try {
-    await apiJsonMutation("/api/companies/", "POST", {
+    const company = await apiJsonMutation<{ id: number }>("/api/companies/", "POST", {
       name: textValue(formData, "name"),
       ruc: textValue(formData, "ruc"),
       industry: textValue(formData, "industry"),
     });
+    companyId = company.id;
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear la empresa.";
     return formFailure(error);
   }
 
-  redirectWithMessage(returnPath, "success", "Empresa creada.");
+  redirectWithMessage(`/companies/${companyId}`, "success", "Empresa creada. Ahora puedes crear su primer proyecto o preparar el equipo.");
+}
+
+export async function saveCompanyBrandingAction(formData: FormData) {
+  const company = textValue(formData, "company");
+  const payload = new FormData();
+  payload.set("document_header", JSON.stringify({ title: textValue(formData, "title"), subtitle: textValue(formData, "subtitle"), footer: textValue(formData, "footer") }));
+  const logo = formData.get("logo");
+  if (logo instanceof File && logo.size) payload.set("logo", logo);
+  if (formData.get("remove_logo") === "on") payload.set("remove_logo", "true");
+  try {
+    await apiFormMutation(`/api/companies/${company}/`, "PATCH", payload);
+  } catch (error) { return formFailure(error); }
+  redirectWithMessage(`/companies/${company}?view=branding`, "success", "Logo y encabezado guardados para las nuevas versiones y los informes.");
 }
 
 export async function createProjectAction(formData: FormData) {
-  const returnPath = ensureReturnPath(formData);
-  const successReturnPath = textValue(formData, "success_return_path") || returnPath;
   const selectedCompanyId = numberValue(formData, "company");
-  const companyName = textValue(formData, "company_name");
-  const companyRuc = textValue(formData, "company_ruc");
 
-  if (!selectedCompanyId && (!companyName || !companyRuc)) {
-    return { error: "Selecciona una empresa o crea una rapida con nombre y RUC." };
+  if (!selectedCompanyId) {
+    return { error: "Selecciona la empresa a la que pertenece el proyecto.", fieldErrors: { company: "Selecciona una empresa existente." } };
   }
 
+  let projectId: number;
   try {
-    let companyId = selectedCompanyId;
-
-    if (!companyId) {
-      const company = await apiJsonMutation<{ id: number }>("/api/companies/", "POST", {
-        name: companyName,
-        ruc: companyRuc,
-        industry: textValue(formData, "company_industry"),
-      });
-
-      companyId = company.id;
-    }
-
-    await apiJsonMutation("/api/projects/", "POST", {
-      company: companyId,
+    const project = await apiJsonMutation<{ id: number }>("/api/projects/", "POST", {
+      company: selectedCompanyId,
       standard: numberValue(formData, "standard"),
       name: textValue(formData, "name"),
       scope: textValue(formData, "scope"),
@@ -122,12 +120,13 @@ export async function createProjectAction(formData: FormData) {
       start_date: textValue(formData, "start_date") || null,
       target_date: textValue(formData, "target_date") || null,
     });
+    projectId = project.id;
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear el proyecto.";
     return formFailure(error);
   }
 
-  redirectWithMessage(successReturnPath, "success", "Proyecto creado y checklist generado.");
+  redirectWithMessage(`/projects/${projectId}`, "success", "Proyecto creado y checklist generado.");
 }
 
 export async function uploadDocumentAction(formData: FormData) {
@@ -174,9 +173,11 @@ export async function uploadDocumentAction(formData: FormData) {
     return { error: "No se pudo cargar el documento." };
   }
 
-  redirectWithMessage(returnPath, "success", autoReview
-    ? "Documento cargado. Consulta el procesamiento y la revision en Documentos y Revisiones."
-    : "Documento cargado. Consulta el estado de procesamiento en Documentos.");
+  const documentPath = `/projects/${project}/documents`;
+  const destination = returnPath.split("?")[0] === documentPath ? `${documentPath}?document=${document.id}` : returnPath;
+  redirectWithMessage(destination, "success", autoReview
+    ? "Documento recibido. NORMAN está preparando la revisión; el estado y el resultado aparecerán aquí."
+    : "Documento recibido. El estado de procesamiento aparecerá aquí.");
 }
 
 export async function reprocessDocumentAction(formData: FormData) {
@@ -198,6 +199,10 @@ export async function runReviewAction(formData: FormData) {
   };
   if (requirementId) {
     payload.requirements = [requirementId];
+  } else if (textValue(formData, "requirement") === "all") {
+    const ids = textValue(formData, "all_requirement_ids").split(",").filter(Boolean).map(Number);
+    if (!ids.length || ids.some((id) => !Number.isSafeInteger(id) || id < 1)) return { error: "No se pudieron identificar los requisitos de la revisión. Recarga la página e inténtalo de nuevo." };
+    payload.requirements = ids;
   }
 
   try {
@@ -207,7 +212,15 @@ export async function runReviewAction(formData: FormData) {
     return formFailure(error);
   }
 
-  redirectWithMessage(returnPath, "success", "Revisión solicitada. Puedes consultar el estado y el resultado en Revisiones.");
+  const [reviewPath, reviewQuery = ""] = returnPath.split("?");
+  const query = new URLSearchParams(reviewQuery);
+  if (/^\/projects\/\d+\/reviews$/.test(reviewPath)) {
+    query.set("document", String(payload.document));
+    if (requirementId) query.set("requirement", String(requirementId));
+    else query.delete("requirement");
+  }
+  const destination = /^\/projects\/\d+\/reviews$/.test(reviewPath) ? `${reviewPath}?${query}` : returnPath;
+  redirectWithMessage(destination, "success", "Revisión solicitada. Puedes continuar con otra tarea y volver a consultar el resultado.");
 }
 
 export async function createActionPlanAction(formData: FormData) {
@@ -486,26 +499,32 @@ export async function deleteProjectAction(formData: FormData) {
 }
 
 export async function createUserAction(formData: FormData) {
-  const returnPath = "/users";
+  let userId: number;
   try {
-    await apiJsonMutation("/api/users/", "POST", {
+    const isStaff = formData.get("is_staff") === "on";
+    const company = numberValue(formData, "company");
+    if (!isStaff && !company) return { error: "Asigna una empresa al usuario para que pueda empezar a trabajar.", fieldErrors: { company: "Selecciona la empresa cliente." } };
+    const user = await apiJsonMutation<{ id: number }>("/api/users/", "POST", {
       username: textValue(formData, "username"),
       password: textValue(formData, "password"),
       email: textValue(formData, "email"),
       first_name: textValue(formData, "first_name"),
       last_name: textValue(formData, "last_name"),
-      is_staff: formData.get("is_staff") === "on",
+      is_staff: isStaff,
+      ...(!isStaff && company ? { company, role: textValue(formData, "role") || "LECTOR" } : {}),
     });
+    userId = user.id;
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo crear el usuario.";
     return formFailure(error);
   }
-  redirectWithMessage(returnPath, "success", "Usuario creado.");
+  const company = numberValue(formData, "company");
+  redirectWithMessage(formData.get("is_staff") !== "on" && company ? `/companies/${company}?view=team` : `/users?user=${userId}`, "success", "Cuenta creada y acceso configurado.");
 }
 
 export async function updateUserAction(formData: FormData) {
   const id = textValue(formData, "user_id");
-  const returnPath = "/users";
+  const returnPath = `/users?user=${encodeURIComponent(id)}`;
   try {
     const payload: Record<string, unknown> = {
       email: textValue(formData, "email"),

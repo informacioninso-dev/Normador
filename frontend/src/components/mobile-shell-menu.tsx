@@ -67,22 +67,6 @@ export function MobileShellMenu({ user }: MobileShellMenuProps) {
               stacked
               onNavigate={closeMenu}
             />
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link
-                href="/companies"
-                onClick={closeMenu}
-                className="ui-pill rounded-full px-4 py-3 text-center text-sm font-semibold text-ink transition hover:bg-[#edf3ff]"
-              >
-                Nueva empresa
-              </Link>
-              <Link
-                href="/projects?view=nuevo"
-                onClick={closeMenu}
-                className="rounded-full bg-signal px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_12px_28px_rgba(79,126,217,0.24)] transition hover:bg-signal/90"
-              >
-                Nuevo proyecto
-              </Link>
-            </div>
             {user && (
               <div className="ui-muted mt-3 rounded-[18px] p-3">
                 <UserMenu username={user.username} isStaff={user.is_staff} />

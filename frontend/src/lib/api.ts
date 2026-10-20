@@ -229,6 +229,18 @@ export async function getCompaniesData() {
   };
 }
 
+export async function getCompanyData(companyId: number) {
+  const company = await safeApiGet<Company | null>(`/api/companies/${companyId}/`, null);
+  if (!company.data) return { company: null, projects: [] as Project[], memberships: [] as CompanyMembership[], users: [] as AppUser[], errors: [company.error].filter(Boolean) as string[] };
+  const canManage = ["ADMINISTRADOR", "RESPONSABLE"].includes(company.data.my_role);
+  const [projects, memberships, users] = await Promise.all([
+    safeApiGet<Project[]>("/api/projects/", [], { company: companyId }),
+    canManage ? safeApiGet<CompanyMembership[]>("/api/company-memberships/", [], { company: companyId }) : Promise.resolve({ data: [] as CompanyMembership[], error: undefined }),
+    company.data.my_role === "ADMINISTRADOR" ? safeApiGet<AppUser[]>("/api/users/", []) : Promise.resolve({ data: [] as AppUser[], error: undefined }),
+  ]);
+  return { company: company.data, projects: projects.data, memberships: memberships.data, users: users.data, errors: [projects.error, memberships.error, users.error].filter(Boolean) as string[] };
+}
+
 export async function getProjectsData() {
   const [companies, standards, projects, checklistItems, actionPlans] = await Promise.all([
     safeApiGet<Company[]>("/api/companies/", []),
@@ -265,9 +277,13 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
-export async function getUsersData(): Promise<{ users: AppUser[]; errors: string[] }> {
-  const result = await safeApiGet<AppUser[]>("/api/users/", []);
-  return { users: result.data, errors: [result.error].filter(Boolean) as string[] };
+export async function getUsersData() {
+  const [users, companies, memberships] = await Promise.all([
+    safeApiGet<AppUser[]>("/api/users/", []),
+    safeApiGet<Company[]>("/api/companies/", []),
+    safeApiGet<CompanyMembership[]>("/api/company-memberships/", []),
+  ]);
+  return { users: users.data, companies: companies.data, memberships: memberships.data, errors: [users.error, companies.error, memberships.error].filter(Boolean) as string[] };
 }
 
 export async function getCurrentUser(): Promise<{ username: string; is_staff: boolean } | null> {

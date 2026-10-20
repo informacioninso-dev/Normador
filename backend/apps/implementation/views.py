@@ -3,6 +3,8 @@ from apps.companies.access import scope_queryset, WRITE_ROLES
 from django.db.models import Count
 from django.db import transaction
 from django.utils import timezone
+from django.http import FileResponse
+from io import BytesIO
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -40,6 +42,8 @@ class ProjectViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
         qs = Project.objects.select_related("company", "standard").annotate(
             checklist_items_count=Count("checklist_items")
         )
+        if company := self.request.query_params.get("company"):
+            qs = qs.filter(company_id=company)
         return qs
 
     def destroy(self, request, *args, **kwargs):
@@ -93,6 +97,15 @@ class ProjectViewSet(CompanyScopedViewMixin, viewsets.ModelViewSet):
         project = self.get_object()
         report = generate_project_progress_report(project)
         return Response(report)
+
+    @action(detail=True, methods=["get"])
+    def export_report(self, request, pk=None):
+        from apps.reviews.excel_report import export_project_workbook
+        project = self.get_object()
+        response = FileResponse(BytesIO(export_project_workbook(project)), as_attachment=True,
+                                filename=f"NORMAN_avance_proyecto_{project.pk}.xlsx")
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class ImplementationChecklistItemViewSet(CompanyScopedViewMixin,
